@@ -1,0 +1,11 @@
+{
+  "name":"Stock Control — Operations Desk",
+  "short_name":"Stock Control",
+  "description":"Stock orders and inventory tracker",
+  "start_url":"./index.html",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#f6f8f7",
+  "theme_color":"#153d36",
+  "icons":[{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
