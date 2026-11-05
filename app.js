@@ -102,13 +102,20 @@ function parseWhatsApp(raw){
  for(let line of input){
   if(/^(?:from|sender|manager)\s*:/i.test(line))continue;
   if(/^\s*\[[^\]]+\]\s*[^:\n]{2,65}:\s*/.test(line))line=line.replace(/^\s*\[[^\]]+\]\s*[^:\n]{2,65}:\s*/,'');
-  const low=normaliseOrderText(line);let result=null,score=0;
-  for(const p of ordered){for(const k of p.finds){if(k&&low.includes(k)&&k.length>score){result=p;score=k.length}}}
+  const low=normaliseOrderText(line);let result=null,score=0;const productHits=new Set();
+  for(const p of ordered){for(const k of p.finds){
+   if(k&&(' '+low+' ').includes(' '+k+' ')){productHits.add(p.id);if(k.length>score){result=p;score=k.length}}
+  }}
   if(!result){unmatched.push(line);continue}
+  // Two requested products in the same sentence need manual review, not a guessed one-item order.
+  const separateAmounts=(low.match(/\b\d+\s*x\b/g)||[]).length;
+  if(productHits.size>1&&(/\b(?:and|plus)\b|[,&+]/i.test(line)||separateAmounts>1)){unmatched.push(line);continue}
   let leading=low.match(/^(\d+)\s*(?:x|of|bottles?|buckets?|containers?|rolls?|packs?|spools?|pcs?|pieces?)?\s/);
-  if(/^\d+\s+(?:l|ml)\b/.test(low))leading=null; // pack size at the start is not an order quantity
+  if(/^\d+\s+(?:l|ml)\b/.test(low))leading=null; // a pack size is not an order quantity
   const trailing=low.match(/(?:x|qty|quantity)\s*(\d+)\s*$/);
-  const amount=leading?Number(leading[1]):trailing?Number(trailing[1]):1;
+  const embedded=!leading&&!trailing?low.match(/\b(\d+)\s*x\b/):null;
+  const amount=leading?Number(leading[1]):trailing?Number(trailing[1]):embedded?Number(embedded[1]):1;
+  if(!leading&&!trailing&&!embedded)unmatched.push('Quantity assumed as 1 — confirm: '+line);
   if(!Number.isSafeInteger(amount)||amount<1||amount>9999||((found.get(result.id)||0)+amount)>9999){unmatched.push(line);continue}
   found.set(result.id,(found.get(result.id)||0)+amount);
  }
