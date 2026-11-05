@@ -1,64 +1,87 @@
-# Claude implementation handoff — Stock Control
+# CLAUDE HANDOFF — Firebase backend for Stock Control
+Updated: 5 November 2026
 
-**Repository:** `Darkz94/stock-control` (currently a static, local-first prototype)
+Repository: https://github.com/Darkz94/stock-control
+Branch: create your own **development branch** and open a PR; do not merge or deploy without approval.
 
-You are implementing a secure cloud backend and WhatsApp workflow for an existing mobile-friendly stock-control web app. Read and preserve the existing UI, product catalogue, image filenames and functional local prototype. Work on a feature branch and submit a PR; do **not** deploy to production, change account billing, send real messages, or expose real personal/business numbers without the owner's explicit approval.
+## Critical requirement: NORMAL WHATSAPP ONLY
 
-## Overview
+The owner uses **regular WhatsApp Messenger**. They do **not** want WhatsApp Business, WhatsApp Business Platform/Cloud API, a BSP, webhooks for WhatsApp, paid WhatsApp sending, QR/session automation, or an unofficial WhatsApp bot. **Do not introduce any of those.**
 
-The stock controller receives WhatsApp requests from authorised property/site managers. The system opens tickets, maintains stock balances and a movement audit, and sends a WhatsApp notification when each ticket is ready for collection. Stock is issued only when marked Collected. Managers may eventually be able to log in and order directly. The application is currently plain HTML/CSS/JS (`index.html`, `app.js`, `styles.css`) with 16 cropped pictures in `assets/`, an installable PWA shell, a working localStorage prototype, WhatsApp click-to-chat drafts and exports.
+The latest UI already supports **immediate ticket creation when a WhatsApp order is pasted** into Order tickets → Quick WhatsApp Paste, with no separate Create Ticket action. Preserve this workflow and its statuses. The app opens regular WhatsApp click-to-chat drafts; a human reviews and presses Send. Never treat opening a draft as message delivery.
 
-### Product catalogue (stable IDs)
+## Existing application
 
-- `two-stroke-500ml`, `two-stroke-20l` — two-stroke oil 500 ml bottles / 20 L buckets
-- `nylon-line` — nylon/trimmer line spool (confirm spool specification)
-- `pine-gel-5l`, `pine-gel-20l` — pine gel buckets
-- `non-selective-20l`, `non-selective-1l` — non-selective herbicide 20 L plastic container / 1 L bottle
-- `selective-20l`, `selective-5l` — selective herbicide 20 L container / 5 L bucket
-- `bleach-5l` — bleach (5 L is an image/prototype assumption; confirm)
-- `toilet-paper`, `black-bags`, `rake`, `broom`, `mop`, `broom-sticks` — cleaning supplies and tools
+- Static installable PWA: `index.html`, `styles.css`, `app.js`, `sw.js`, `manifest.webmanifest`.
+- 16 product variants and individually cropped images under `assets/`. Do not change the approved design or image mapping without approval.
+- Existing dashboard, stock receiving, adjustments, conversions, audit trail, export, manual tickets, instant-paste review tickets, click-to-chat message drafts and collection statuses.
+- Local prototype uses `localStorage` (`stock_control_local_v1`), without login or shared data. It must not be used as a multi-device source of truth.
 
-Keep product IDs and related image file names intact. All opening balances zero; do not invent or seed actual stock quantities, manager names, numbers, sites or orders.
+## Ticket lifecycle to preserve
 
-## Phase 1: Firebase scaffolding (prepare, no production deployment)
+1. Manager sends normal WhatsApp to the operator.
+2. Operator copies/pastes into Quick WhatsApp Paste.
+3. App **immediately saves** a unique ticket `SC-YYYYMMDD-####` in `review` / **Needs review**. Preserve raw message, parsed line items, unmatched text, optional manager/site/phone, timestamps, source `manual-whatsapp-paste`.
+4. Operator can edit and confirm the same ticket; valid manager and at least one product required. Status then `new` / **New request**.
+5. Controller starts preparing, then marks `ready` / **Ready to collect**.
+6. Controller opens a manual WhatsApp draft addressed to the manager and taps Send personally. Never mark the notification sent automatically.
+7. When collected, stock is deducted atomically and ticket becomes `collected`. No double collection, no negative inventory. Cancel active requests without stock deduction.
+8. A pasted message with unknown products must still result in a ticket with raw text and `reviewLines`; the app must never silently guess missing pack sizes or quantities.
 
-1. Create a **separate** Firebase project for Stock Control (not the existing House Timer Firebase project). Owner will connect Firebase account, choose unique project ID and approve any billing upgrade. Keep sensitive info out of GitHub and do not commit service-account private keys, Meta access tokens, phone numbers or secrets.
-2. Install the Firebase SDK and tooling; prefer a minimal modern build structure if needed, but retain UI appearance, mobile responsiveness, static assets, PWA support and the ability to run locally.
-3. Firebase Authentication: allowlisted staff accounts, email/password or appropriate approved provider. Roles `admin` / `stock_controller` / `manager` mapped to immutable Auth custom claims set only by trusted administrators, not self-assigned client fields. Disable public self-service access to inventory. Site-scoped manager access to own tickets only; stock controller/admin access to inventory and operational tickets. Have a secure and auditable bootstrap process for the first admin.
-4. Firestore collections: `products`, `inventory`, `tickets`, `movements`, `staff`, `sites`, `incomingWhatsApp`, `outgoingWhatsApp`, `settings` (choose names consistently and document schema). Product images can remain static hosted assets. Each inventory document stores a whole-pack count, update timestamps and optional low stock threshold. Tickets include status, manager/site refs, line items, createdAt/updatedAt, preparedAt, readyAt, collectedAt, responsible actor, message IDs and message status. Movements are immutable once created.
-5. Secure the database with `firestore.rules` using least privilege, explicit denial for unauthenticated users, role-based scoped reads, and NO direct arbitrary client writes to balances, movements, notification logs or audit history. Supply `firestore.indexes.json`, `firebase.json`, `.env.example` with placeholders only, and developer setup instructions.
-6. Put inventory writes and ticket state transitions in validated callable Cloud Functions / server functions. Use Firestore transactions to atomically check quantities, prevent negatives, prevent double issue, and record stock movements with an audit actor. Server-side timestamps, idempotency, and consistent error messages are required. For a collection, check all line items and update counts, status and immutable movement records in one transaction. Conversions must subtract source units and add target units atomically. Consider explicit reservation only if implemented end to end; current prototype deducts only on collected.
-7. Build safe one-time migration/import from local JSON backup, requiring an admin confirmation and preview before import. Prevent duplicate IDs or duplicate imported tickets. Do not silently overwrite live data.
-8. Maintain data minimisation and appropriate retention for South African POPIA. Include backups, recovery and access logs; implement pagination and query boundaries for scale.
-9. Tests: Firebase Emulator Suite tests for security rules (unauthenticated denied, non-staff denied, manager site scope, admin allowed), transactions (out of stock, duplicate collection, duplicate conversion, concurrency), auth, product data, no secret leakage and error recovery. Keep lint and build checks green.
+## Firebase build
 
-## Phase 2: WhatsApp automation — prepare behind feature flag
+Create or prepare connection instructions for a **new dedicated Firebase project**, separate from House Timer and AFK Ages. The owner will create/connect their Firebase account and approve deployments.
 
-1. Use official Meta WhatsApp Business Platform Cloud API (or a user-approved BSP). Owner will later supply a dedicated business number, WABA ID, phone number ID, app secret and access token **through secure secret storage**. Do not put them in frontend code or GitHub, even after making the repository private.
-2. HTTPS webhook with Meta's GET challenge verification plus POST `X-Hub-Signature-256` signature verification. Restrict inbound requests to configured sender/allowlist when an appropriate management mapping is in place. Deduplicate retries by provider message ID and maintain robust delivery/error logs.
-3. Incoming messages from a registered manager generate an **unconfirmed draft** ticket and notify the stock controller internally. Parse text conservatively: 20 L vs 5 L vs 1 L vs 500 ml must never be silently confused. Flag ambiguous lines for human review. Never issue stock on the strength of a raw WhatsApp message. The controller can approve the draft to create a real ticket.
-4. On creation, optional acknowledgement to manager and internal stock-controller notification (subject to policy/service window). On status Ready, send manager a collection-ready message only once (idempotent), using an approved utility template when required. Outbound delivery statuses `queued/sent/delivered/read/failed` should be tracked separately from order status. Support resend and manual fallbacks. Collection then triggers atomic issuance; do not send a message claiming collection before it occurs.
-5. Implement opt-in/notice, approved templates, Meta messaging policy and 24-hour service-window rules. Human handoff and graceful handling of unregistered senders required. Business phone credentials and real message sending remain disabled until owner authorises and connects.
-6. In UI replace WhatsApp draft buttons with explicit status indicators and backstop manual click-to-chat links. Make it clear when delivery has genuinely succeeded and when it is merely a draft.
+Suggested Firestore model, finalise names in design notes:
+- `products/{productId}` — variant definition, pack size, image reference, category, active flag.
+- `stockBalances/{productId}` — whole-pack on-hand quantities, version/updatedAt.
+- `tickets/{ticketId}` — manager identity, site, requested line items, original WhatsApp text, unmatched lines, status, creator, timestamps, source, reviewer, collection details.
+- `stockMovements/{movementId}` — immutable signed stock movements (receipts, corrections, conversions, collections), actor, reason, ticketId.
+- `users/{uid}` — verified role, active flag, manager/site assignments, safe contact fields.
+- `sites/{siteId}` — site info and authorised managers.
+- `auditLogs/{id}` — significant role and order events with server timestamps.
+- `settings/*` — safe nonsecret configuration.
 
-## User-owned steps (stop and provide instructions)
+Roles: admin, stock-controller, site-manager. Use Firebase Authentication, deny-by-default Firestore rules, verified user role and site assignments. Managers must not edit balances, alter historic orders, or see other managers' private data. Stock controllers can process tickets and stock; admins can manage staff. Avoid trusting client-side role flags. Provide Firestore rules tests.
 
-- User creates or grants access to *new* Firebase Stock Control project; confirms project ID, region, authentication provider and intended staff/manager accounts. Do not touch `house-timer-39028`.
-- User decides whether to enable any paid Cloud Functions/hosting/WhatsApp services and confirms budget.
-- User provides approved business sender credentials through secret manager, verification steps, confirmed phone numbers and WhatsApp template approvals (never in chat or git).
-- User confirms actual bleach size, nylon spool specification, bag/toilet-paper packaging, site list, user roles and whether managers can order via app in addition to WhatsApp.
-- Only after clear owner approval, deploy staging, test and then deploy production.
+Implement atomic Firestore transactions or trusted server functions for receiving, correcting, converting, and issuing stock, with idempotency and audit recording. Run all dependent mutations in one transaction. Product counts cannot go below zero; a collected order cannot be reissued. New ticket IDs and writes must be collision-resistant across multi-user devices (do not rely on the browser's local `nextTicket` counter in production). Retain the original message and timestamps for review while protecting personal information.
 
-## Acceptance criteria
+Make the app work with Firestore updates across multiple devices, with optimistic loading/error states, offline handling appropriate to stock risk, and no misleading success before the backend confirms. If migrating local prototype data, build an explicit admin-reviewed import flow that avoids duplicate tickets and stock movements.
 
-- Existing local demo still builds and renders, 16 asset files still load, no layout regression.
-- Multiple authorised devices share accurate stock and ticket state.
-- Manager A cannot view another manager's site or requests. Unauthorized users cannot query data.
-- Staff can receive, adjust and convert stock; two people cannot over-issue simultaneously.
-- One ticket's collection deducts each product exactly once and logs the actor/time, never producing negative counts.
-- Real inbound WhatsApp creates a pending draft (after verification) and not an automatically approved stock issue.
-- Ready status queues one outbound collection notice; retries are idempotent and delivery failure is visible.
-- No credentials or real numbers in git; production deployment and real messaging require user approval.
-- Provide PR, test evidence, Firebase rules, indexes, environment example and step-by-step connection checklist.
+## Manager self-service alternative (optional Phase 2)
 
-Official references: https://firebase.google.com/docs/firestore/security/get-started ; https://firebase.google.com/docs/firestore/manage-data/transactions ; https://developers.facebook.com/docs/whatsapp/cloud-api/ ; https://whatsappbusiness.com/policy/
+Provide an authenticated **in-app ordering form**, where managers select catalogue products and submit an order. Their request creates a Firestore ticket automatically, with no WhatsApp API or copied message. Keep human-to-human normal WhatsApp for messages.
+
+## User privacy and operational controls
+
+- Public repository contains no real phone numbers, pasted WhatsApp messages, personal staff data, service-account keys or credentials.
+- Use environment separation and document secure Firebase setup. Firebase web config is not authentication; Firestore rules are essential.
+- Do not enable billing, deploy rules or Cloud Functions, provision phone numbers, contact managers or send real messages without explicit approval.
+- Manual chat opening is not successful delivery; no unsupported claim of WhatsApp read receipts.
+- Product conversions are inventory records, not instructions for physically repackaging chemicals.
+
+## Required tests
+
+- Pasting a normal multiline order creates a persisted `review` ticket instantly, with unique ID.
+- `2 x Pine Gel 5L\n4 x Two-Stroke Oil 500ml\n3 x Black Bags` recognises exact products and quantities.
+- Correctly distinguish **non-selective** from selective herbicide, and **500 ml** from **20 L** two-stroke oil.
+- Missing manager, unknown products, text-only messages or unclear quantities remain reviewable with the original text intact.
+- Accidental repeated paste does not create a duplicate immediately.
+- Review/edit/confirm advances a ticket; review tickets cannot be prepared or collected.
+- Stock deduction occurs only upon collection and exactly once.
+- Cross-device concurrency cannot create negative balances, double issues or lost history.
+- Authorised/unauthorised roles pass/fail security rules tests.
+- WhatsApp buttons only open drafts; no API calls or automatic sends.
+
+## Deliverables
+
+1. Development branch with PR and design notes.
+2. Working Firebase authentication, Firestore schema, rules, indexes and data access integration.
+3. Emulator tests and app tests with how-to-run instructions.
+4. Sample data and placeholder environment documentation only; no sensitive credentials.
+5. Clear step-by-step owner checklist to connect Firebase and grant permissions.
+6. Separate instructions for testing before deployment, requiring approval before production release.
+
+See `docs/WHATSAPP_INTEGRATION.md` for the fixed normal-WhatsApp requirement.
+
+References: https://firebase.google.com/docs/firestore/security/get-started and https://firebase.google.com/docs/firestore/manage-data/transactions
