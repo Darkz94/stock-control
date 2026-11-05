@@ -105,7 +105,8 @@ function parseWhatsApp(raw){
   const low=normaliseOrderText(line);let result=null,score=0;
   for(const p of ordered){for(const k of p.finds){if(k&&low.includes(k)&&k.length>score){result=p;score=k.length}}}
   if(!result){unmatched.push(line);continue}
-  const leading=low.match(/^(\d+)\s*(?:x|of|bottles?|buckets?|containers?|rolls?|packs?|spools?|pcs?|pieces?)?\s/);
+  let leading=low.match(/^(\d+)\s*(?:x|of|bottles?|buckets?|containers?|rolls?|packs?|spools?|pcs?|pieces?)?\s/);
+  if(/^\d+\s+(?:l|ml)\b/.test(low))leading=null; // pack size at the start is not an order quantity
   const trailing=low.match(/(?:x|qty|quantity)\s*(\d+)\s*$/);
   const amount=leading?Number(leading[1]):trailing?Number(trailing[1]):1;
   if(!Number.isSafeInteger(amount)||amount<1||amount>9999||((found.get(result.id)||0)+amount)>9999){unmatched.push(line);continue}
