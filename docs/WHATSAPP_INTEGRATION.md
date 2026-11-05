@@ -1,52 +1,38 @@
-# Secure WhatsApp + shared stock integration (Phase 2)
+# Normal WhatsApp Messenger workflow — no Business API
 
-## Intended process
+This project uses **ordinary WhatsApp Messenger**, not WhatsApp Business or the WhatsApp Business Platform.
 
-1. A verified manager sends a stock request to the designated business WhatsApp number.
-2. A verified webhook receives the event on a secured backend, de-duplicates it by WhatsApp message ID and stores the message privately.
-3. The parser generates a **draft** request with a confidence level. A staff member confirms product mapping and pack sizes before submission.
-4. The backend atomically creates the order ticket and notifies the stock controller. Acknowledgement to the manager is sent only where allowed.
-5. Stock controller reviews, prepares and marks the order **Ready to collect**.
-6. Backend sends a ready-for-collection WhatsApp message, using an approved utility template when the 24-hour service window has ended.
-7. Actual collection triggers an atomic stock deduction and an audit entry. Inventory is never deducted twice.
+## What is possible
 
-## Required setup
+- A manager messages the stock controller using their usual WhatsApp.
+- The stock controller copies the manager's message and pastes it into **Order tickets → Quick WhatsApp Paste**.
+- Pasting triggers an **immediately saved, numbered ticket** in **Needs review**. The original message is preserved; matched catalogue products and any unmatched lines are shown.
+- The controller opens **Review and confirm ticket** to check the manager, site, items, pack sizes and quantities. They can add or correct lines.
+- The ticket then progresses **New request → Preparing → Ready to collect → Collected**, with collection debiting actual stock once.
+- The controller taps **Open WhatsApp: ready notice** to open a prefilled message in their usual WhatsApp chat. **They must review and tap Send**.
+- An optional button can open a prefilled copy for the controller's own regular WhatsApp number. A copy-text button is available if opening a chat fails.
+- Missing/unrecognised products or a missing manager must be reviewed; nothing is issued automatically. Duplicate identical pastes within 60 seconds reopen the existing ticket.
 
-- Registered Meta business / approved WhatsApp Business Platform sender (either Meta Cloud API or an approved solution provider).
-- Business phone number, phone number ID, WhatsApp business account ID and suitable approval.
-- Secure server environment and webhook HTTPS endpoint; secrets in environment/secret manager **only**.
-- Approved utility templates for acknowledgements and collection notices when the service window requires them.
-- Staff access via Firebase Authentication (or equivalent), manager allowlist, consent/notice for using manager numbers and messages, secure retention, backups and restricted access.
-- Firestore (or equivalent database) with security rules and transactions. Do not trust the client for stock availability or deductions.
+## What is *not* supported
 
-## Suggested data model
+Regular WhatsApp does **not** expose a supported public interface for third-party apps to read chats, listen for incoming messages, send messages or confirm delivery automatically. Do **not** claim automatic inbound capture or outbound replies. Do **not** build unofficial WhatsApp Web session bots, browser automation, QR-session scrapers or integrations designed to circumvent platform rules. Do not ask managers for WhatsApp account credentials.
 
-- `products/{id}`: stable ID, display name, size, unit, group, image reference, active flag, low-stock threshold.
-- `inventory/{id}`: available, reserved (optional), updatedAt, version.
-- `tickets/{ticketId}`: manager UID / phone (restricted), site, lines, status, timestamps, openedBy, preparedBy, collectedBy, deduplicated inbound message ID.
-- `movements/{id}`: product, signed quantity, action, ticket, actor, date, reason; append-only audit stream.
-- `managers/{uid}`: allowed phone number, role, site assignment, active.
-- `waMessages/{messageId}`: inbound/outbound message status, source reference, retry, timestamps; restricted storage.
+The `https://wa.me/<international-number>?text=<encoded-message>` URL opens the WhatsApp conversation with a prewritten message. The app cannot know whether the operator tapped Send.
 
-## Backend controls
+## Alternative if the operator wants orders to appear without copying WhatsApp
 
-- Verify `X-Hub-Signature-256` HMAC signature on incoming POST webhooks with the app secret; verify webhook challenge on setup.
-- Idempotency for inbound webhooks and outbound sends; retry transient failures safely.
-- No WhatsApp access token, App Secret, phone numbers or private stock data in static JavaScript or public GitHub.
-- Validate products, sizes, quantities and allowed transitions in backend functions.
-- Deduct stock on collection in an atomic transaction: confirm all available quantities, update all counts, create movements, change ticket status once.
-- Staff-only authorization for issuing stock, creating inventory adjustments, changing system settings.
-- Manager messages are not proof of manager identity without verified allowlist / appropriate process.
-- Enforce conversation window and business-initiated template/opt-in rules; human escalation available.
+With Firebase connected, add an **authenticated manager order form** directly in the stock-control app:
+1. Manager signs in, chooses products, sizes and quantities, and submits.
+2. Firestore securely creates a new ticket, visible immediately to authorised stock controllers.
+3. Manager and controller may still chat via normal WhatsApp separately.
+4. The controller may send a manual WhatsApp collection-ready message.
 
-## WhatsApp messaging notes
+This provides fully automatic ticket creation on form submission **without requiring WhatsApp Business**, but it is **not automatic capture of a WhatsApp chat**.
 
-For now this prototype uses `https://wa.me/<international-number>?text=<encoded-message>` to open a draft. The app does not use a chatbot, webhook or API. Manual sending does **not** count as an automated successful delivery, so ticket status does not imply that WhatsApp notification was sent.
+## Security and safety
 
-Relevant official references:
-- WhatsApp Business Messaging Policy: https://whatsappbusiness.com/policy/
-- WhatsApp Click to Chat: https://faq.whatsapp.com/5913398998672934/
-
-## Staging guidance
-
-Develop a new secured backend and staging number privately before switching live manager numbers. Do not use the public static demonstration for real business data. Get the business number, exact product pack sizes (bleach size, nylon spool specification, toilet-paper pack size, black-bag roll size), store locations, manager permissions and collection sign-off requirements confirmed during setup.
+- The current prototype is localStorage-only and not an authenticated multi-user system.
+- The repository is public. Do not commit real manager phone numbers, personal conversations, stock details, Firebase private credentials, or API secrets.
+- Before team use, implement Firebase Authentication, role-based Firestore rules and server-side inventory transactions.
+- Do not use a WhatsApp draft as proof of sending; collection status and messaging are separate.
+- Product images are illustrations, not chemical safety labels. All physical chemical work follows product labels, safety data sheets and workplace policy.
