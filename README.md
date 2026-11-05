@@ -12,11 +12,12 @@ The app includes 16 independently tracked pack sizes: two-stroke oil (500 ml and
 - Inventory catalogue with photographs, category filters, search, and per-product counts.
 - Receive stock, write off stock, or set an exact count, with a dated movement log.
 - Four optional **pack-size stock conversions** (20 L → 500 ml, 20 L → 5 L, 20 L → 1 L and 20 L → 5 L). These are *inventory transactions*, not chemical handling instructions.
-- Manual manager ticket creation, optional WhatsApp-message paste and best-effort line parser, duplicate line consolidation, and ticket IDs.
+- **Instant WhatsApp paste:** pasting a manager’s message on the Order Tickets screen immediately creates a numbered ticket, without pressing Create Ticket. The saved ticket enters **Needs review** and retains the original message, parsed products, and any unmatched text. Manager, products and quantities can be corrected and confirmed on the same ticket.
+- Manual manager ticket creation, best-effort line parser, duplicate line consolidation, and ticket IDs. A recent identical pasted message is deduplicated.
 - Statuses: **New → Preparing → Ready to collect → Collected**, with cancellations for active tickets.
 - Stock deducted **when marked Collected**, not merely when an order is prepared. Prevents deductions that would make stock negative.
-- WhatsApp click-to-chat drafts for manager acknowledgement, manager collection notification and internal business-number notification. A user must review and send in WhatsApp. No auto-sending is claimed.
-- Ticket printing, CSV exports, JSON backup/import, configurable business WhatsApp number, installable/offline PWA.
+- **Normal WhatsApp Messenger** click-to-chat drafts for manager acknowledgement, ready-to-collect notification, and an optional personal WhatsApp ticket copy. A person checks the recipient and manually taps Send. No WhatsApp Business Platform or WhatsApp Business app is needed.
+- Ticket printing, CSV exports, JSON backup/import, optional personal WhatsApp number, installable/offline PWA.
 
 ## Try it
 
@@ -40,9 +41,9 @@ Review the detected products and quantities carefully; the parser is not AI and 
 
 ## Important prototype limits
 
-**This is NOT yet a shared production stock-control system.** Storage uses `localStorage` on each browser/device. One device cannot see other devices' live changes. The initial quantity for every product is zero. There is no staff authentication, access control, server database, webhook, push message, real WhatsApp integration or cloud backup. Opening WhatsApp drafts is **not** equivalent to sending a message. The production app must not publish any phone numbers, WhatsApp API credentials, private stock details or manager information in a public repository.
+**This is NOT yet a shared production stock-control system.** Storage uses `localStorage` on each browser/device. One device cannot see other devices' live changes. The initial quantity for every product is zero. There is no staff authentication, access control, shared server database, WhatsApp chat access, automatic messaging or cloud backup. Opening WhatsApp drafts is **not** equivalent to sending a message. The production app must not publish actual phone numbers, private stock details or manager information in a public repository.
 
-To upgrade to a team app, implement a secure backend (e.g. Firebase Authentication + Firestore), restrict access by verified staff/manager roles with security rules, move stock changes to atomic server transactions and implement audit trails. Connect Meta's WhatsApp Business Platform Cloud API with a verified business number, webhook signature validation, approved templates when required, and an opt-in/consent policy. See [Integration plan](docs/WHATSAPP_INTEGRATION.md).
+To upgrade to a team app, implement a secure backend (e.g. Firebase Authentication + Firestore), restrict access by verified staff/manager roles with security rules, move stock changes to atomic server transactions and implement audit trails. Keep ordinary WhatsApp manual: use share/click-to-chat links, with no automatic receiving or sending. If managers need automatic ticket creation without copying WhatsApp messages, provide an authenticated **in-app order form** backed by Firebase. See [Normal WhatsApp workflow](docs/WHATSAPP_INTEGRATION.md).
 
 ## File layout
 
@@ -51,13 +52,13 @@ To upgrade to a team app, implement a secure backend (e.g. Firebase Authenticati
 - `app.js` — stock catalogue, tickets, conversions, parser, WhatsApp drafts, exports
 - `assets/*.webp` — individual product images, generated for this project
 - `manifest.webmanifest`, `sw.js`, `icon.svg` — PWA installation and offline asset caching
-- `docs/WHATSAPP_INTEGRATION.md` — plan for secure multi-user WhatsApp automation
+- `docs/WHATSAPP_INTEGRATION.md` — normal WhatsApp workflow and Firebase-backed in-app ordering alternative
 
 ## Data/stock rules
 
 - Each unit means a **whole product pack**, not a loose litre.
 - A conversion subtracts whole source containers and adds the corresponding whole target containers. It does not physically perform repackaging.
-- A ticket can be prepared without stock, but cannot be collected until stock is available.
+- A ticket can be prepared without stock, but cannot be collected until stock is available. **Instant-paste tickets must first be reviewed and confirmed**, and cannot be collected while in Needs Review.
 - Collected orders cannot be collected twice or cancelled afterward.
 - Keep a JSON backup before clearing browser data or switching phones.
 
