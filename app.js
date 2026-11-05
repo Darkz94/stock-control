@@ -6,8 +6,8 @@ const PRODUCTS = [
   {id:'nylon-line',name:'Nylon line',size:'Trimmer line spool',group:'Garden consumables',unit:'spools',img:'nylon-line.webp',keywords:['nylon','trimmer line','brushcutter line']},
   {id:'pine-gel-5l',name:'Pine gel',size:'5 L bucket',group:'Chemicals & liquids',unit:'buckets',img:'pine-gel-5l.webp',keywords:['pine gel 5','pinegel 5']},
   {id:'pine-gel-20l',name:'Pine gel',size:'20 L bucket',group:'Chemicals & liquids',unit:'buckets',img:'pine-gel-20l.webp',keywords:['pine gel 20','pinegel 20']},
-  {id:'non-selective-20l',name:'Non-selective herbicide',size:'20 L plastic container',group:'Chemicals & liquids',unit:'containers',img:'non-selective-20l.webp',keywords:['non selective 20','non-selective 20','nonselective 20']},
-  {id:'non-selective-1l',name:'Non-selective herbicide',size:'1 L bottle',group:'Chemicals & liquids',unit:'bottles',img:'non-selective-1l.webp',keywords:['non selective 1','non-selective 1','nonselective 1']},
+  {id:'non-selective-20l',name:'Non-selective herbicide',size:'20 L plastic container',group:'Chemicals & liquids',unit:'containers',img:'non-selective-20l.webp',keywords:['non selective herbicide 20','nonselective herbicide 20','non selective 20','non-selective 20','nonselective 20']},
+  {id:'non-selective-1l',name:'Non-selective herbicide',size:'1 L bottle',group:'Chemicals & liquids',unit:'bottles',img:'non-selective-1l.webp',keywords:['non selective herbicide 1','nonselective herbicide 1','non selective 1','non-selective 1','nonselective 1']},
   {id:'selective-20l',name:'Selective herbicide',size:'20 L container',group:'Chemicals & liquids',unit:'containers',img:'selective-20l.webp',keywords:['selective 20','selective herbicide 20']},
   {id:'selective-5l',name:'Selective herbicide',size:'5 L bucket',group:'Chemicals & liquids',unit:'buckets',img:'selective-5l.webp',keywords:['selective 5','selective herbicide 5']},
   {id:'bleach-5l',name:'Bleach',size:'5 L container',group:'Chemicals & liquids',unit:'containers',img:'bleach-5l.webp',keywords:['bleach','jik']},
@@ -24,12 +24,12 @@ const CONVERSIONS=[
   {source:'non-selective-20l',target:'non-selective-1l',ratio:20},
   {source:'selective-20l',target:'selective-5l',ratio:4}
 ];
-const STATUSES={new:'New request',preparing:'Preparing',ready:'Ready to collect',collected:'Collected',cancelled:'Cancelled'};
+const STATUSES={review:'Needs review',new:'New request',preparing:'Preparing',ready:'Ready to collect',collected:'Collected',cancelled:'Cancelled'};
 const KEY='stock_control_local_v1';
 const initial=()=>({schema:1,counts:Object.fromEntries(PRODUCTS.map(p=>[p.id,0])),tickets:[],movements:[],nextTicket:1,settings:{company:'Stock Control',businessWhatsApp:'',lowThreshold:2}});
 let data;
 try{const saved=JSON.parse(localStorage.getItem(KEY)||'null');data=validateData(saved)?saved:initial();}catch(_){data=initial()}
-const ui={view:'dashboard',category:'All products',search:'',ticketFilter:'All',detail:null,draftLines:[],unmatched:[]};
+const ui={view:'dashboard',category:'All products',search:'',ticketFilter:'All',detail:null,draftLines:[],unmatched:[],captureMeta:{manager:'',phone:'',site:''}};
 const product=id=>PRODUCTS.find(p=>p.id===id);
 const img=id=>'./assets/'+product(id).img;
 const esc=v=>String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
@@ -44,7 +44,7 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){not
 function notify(message,error=false){const host=document.querySelector('#toast-host');host.innerHTML=`<div class="toast ${error?'error':''}">${esc(message)}</div>`;window.clearTimeout(notify._timer);notify._timer=setTimeout(()=>host.innerHTML='',3900)}
 function move(id,change,kind,reason,ticketId=null){data.counts[id]=qty(id)+change;data.movements.unshift({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),at:new Date().toISOString(),productId:id,change,kind,reason:String(reason||''),ticketId});}
 function dashboard(){
- const pending=data.tickets.filter(t=>['new','preparing'].includes(t.status));const ready=data.tickets.filter(t=>t.status==='ready');const low=PRODUCTS.filter(p=>qty(p.id)<=data.settings.lowThreshold);const collected=data.tickets.filter(t=>t.status==='collected');
+ const pending=data.tickets.filter(t=>['review','new','preparing'].includes(t.status));const ready=data.tickets.filter(t=>t.status==='ready');const low=PRODUCTS.filter(p=>qty(p.id)<=data.settings.lowThreshold);const collected=data.tickets.filter(t=>t.status==='collected');
  return title('OPERATIONS OVERVIEW','Your stock, at a glance','Keep supplies organised and manager requests moving.',btn('＋ New order ticket','new-order')+btn('＋ Receive stock','stock-receive',''))+
  `<div class="stats-grid"><div class="stat top"><div class="stat-top">Product variants <span class="stat-icon">▦</span></div><div class="stat-number">${PRODUCTS.length}</div><div class="stat-bottom">Cleaning, garden & maintenance</div></div><div class="stat"><div class="stat-top">Open requests <span class="stat-icon">☷</span></div><div class="stat-number">${pending.length}</div><div class="stat-bottom">New and being prepared</div></div><div class="stat"><div class="stat-top">Ready to collect <span class="stat-icon">✓</span></div><div class="stat-number">${ready.length}</div><div class="stat-bottom">Awaiting handover</div></div><div class="stat"><div class="stat-top">Low / zero stock <span class="stat-icon">!</span></div><div class="stat-number">${low.length}</div><div class="stat-bottom">At or below alert threshold</div></div></div>`+
  `<div class="two-columns"><section class="panel"><div class="panel-heading"><div><h2>Recent order tickets</h2><div class="panel-sub">Track requests from creation through collection</div></div><button class="heading-link btn tiny" data-view="orders">All tickets →</button></div>${data.tickets.length?`<div class="ticket-list">${data.tickets.slice(0,5).map(ticketRow).join('')}</div>`:`<div class="empty-state"><span class="empty-illustration">☷</span>No orders yet. Create your first manager request to open a ticket.</div>`}</section>
@@ -59,8 +59,26 @@ function inventory(){
  <div class="filters">${categories.map(c=>`<button class="filter ${ui.category===c?'active':''}" data-action="category" data-category="${esc(c)}">${esc(c)}</button>`).join('')}</div><div class="product-grid" id="product-grid">${filtered.map(productCard).join('')}</div>${filtered.length?'':'<div class="empty-state">No products match this search.</div>'}`;
 }
 function productCard(p){let n=qty(p.id);return `<article class="product"><div class="product-image"><span class="category-tag">${esc(p.group)}</span><img src="${esc(img(p.id))}" alt="${esc(formatLabel(p))}" loading="lazy" /></div><div class="product-info"><div class="product-title">${esc(p.name)}</div><div class="product-variant">${esc(p.size)}</div><div class="product-footer"><div class="stock-qty ${n<=data.settings.lowThreshold?'stock-low':''}">${n}<small>${esc(p.unit)}</small></div><button class="btn tiny" data-action="adjust-stock" data-id="${esc(p.id)}">Adjust</button></div></div></article>`}
-function orders(){let tks=ui.ticketFilter==='All'?data.tickets:data.tickets.filter(t=>t.status===ui.ticketFilter);return title('MANAGER REQUESTS','Order tickets','Copy an order from ordinary WhatsApp, prepare it and arrange collection.',btn('＋ New order','new-order'))+
- `<div class="notice"><strong>Normal WhatsApp workflow</strong>Manager messages you in WhatsApp → copy and paste the order → create a ticket → prepare → open a ready-to-collect message in WhatsApp and tap Send yourself. Nothing is read or sent automatically.</div><div style="height:14px"></div><div class="filters">${['All','new','preparing','ready','collected','cancelled'].map(s=>`<button data-action="ticket-filter" data-status="${s}" class="filter ${ui.ticketFilter===s?'active':''}">${s==='All'?'All tickets':STATUSES[s]} (${s==='All'?data.tickets.length:data.tickets.filter(t=>t.status===s).length})</button>`).join('')}</div><section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Ticket</th><th>Manager / site</th><th>Items</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>${tks.map(t=>`<tr><td><strong>${esc(t.id)}</strong></td><td><strong>${esc(t.manager)}</strong><span class="small-muted">${esc(t.site||'No site supplied')}</span></td><td>${t.lines.length} products</td><td>${esc(dateFmt(t.createdAt))}</td><td>${statusBadge(t.status)}</td><td><button class="btn tiny" data-action="ticket-detail" data-id="${esc(t.id)}">View ›</button></td></tr>`).join('')}</tbody></table></div>${!tks.length?'<div class="empty-state">No tickets in this category.</div>':''}</section>`}
+function orders(){
+ const tks=ui.ticketFilter==='All'?data.tickets:data.tickets.filter(t=>t.status===ui.ticketFilter);
+ return title('MANAGER REQUESTS','Order tickets','Paste a normal WhatsApp message and a ticket is created immediately.',btn('＋ Manual order','new-order'))+
+ `<section class="panel" style="padding:20px;margin-bottom:17px">
+  <div class="panel-heading"><div><h2>⚡ Quick WhatsApp Paste</h2><p class="panel-sub">One paste = one saved ticket. No Create Ticket button required.</p></div></div>
+  <div class="notice"><strong>Normal WhatsApp only</strong>Copy the manager’s order from WhatsApp. Pasting below instantly creates a numbered ticket marked <strong>Needs review</strong>. Check the products and manager before preparing stock. No chat access or automatic messages.</div>
+  <div class="form-grid" style="margin-top:15px">
+   <div class="field"><label for="quick-manager">Manager name (optional before pasting)</label><input id="quick-manager" maxlength="100" placeholder="e.g. Thabo" value="${esc(ui.captureMeta.manager)}" /></div>
+   <div class="field"><label for="quick-phone">Manager WhatsApp number (optional)</label><input id="quick-phone" inputmode="tel" placeholder="e.g. 082 123 4567" value="${esc(ui.captureMeta.phone)}" /></div>
+   <div class="field full"><label for="quick-site">Site / property (optional)</label><input id="quick-site" maxlength="120" placeholder="e.g. Complex A" value="${esc(ui.captureMeta.site)}" /></div>
+  </div>
+  <div class="field"><label for="quick-paste-message">Paste WhatsApp order here — creates ticket instantly</label>
+  <textarea id="quick-paste-message" rows="5" placeholder="2 x Pine Gel 5L&#10;4 x Two-Stroke Oil 500ml&#10;3 x Black Bags" aria-describedby="quick-paste-help"></textarea>
+  <small id="quick-paste-help">If your phone inserts text without triggering a Paste event, use the backup button below.</small></div>
+  ${btn('Save typed text as ticket','quick-capture','dark')}
+ </section>
+ <div class="filters">${['All','review','new','preparing','ready','collected','cancelled'].map(st=>`<button data-action="ticket-filter" data-status="${st}" class="filter ${ui.ticketFilter===st?'active':''}">${st==='All'?'All tickets':STATUSES[st]} (${st==='All'?data.tickets.length:data.tickets.filter(t=>t.status===st).length})</button>`).join('')}</div>
+ <section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Ticket</th><th>Manager / site</th><th>Items</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>${tks.map(t=>`<tr><td><strong>${esc(t.id)}</strong></td><td><strong>${esc(t.manager)}</strong><span class="small-muted">${esc(t.site||'No site supplied')}</span></td><td>${t.lines.length} products</td><td>${esc(dateFmt(t.createdAt))}</td><td>${statusBadge(t.status)}</td><td><button class="btn tiny" data-action="ticket-detail" data-id="${esc(t.id)}">View ›</button></td></tr>`).join('')}</tbody></table></div>${!tks.length?'<div class="empty-state">No tickets in this category.</div>':''}</section>`;
+}
+
 function transfers(){return title('PACK SIZE CONVERSIONS','Stock conversions','Record stock moving from larger containers into smaller product sizes.',btn('⇄ Record conversion','new-transfer'))+
  `<div class="notice warning"><strong>Important safety note</strong>This screen records inventory conversions; it is not a procedure for physically handling or repackaging chemicals. Follow product labels, applicable safety procedures and required container labelling.</div><div style="height:18px"></div><div class="product-grid">${CONVERSIONS.map(c=>{let a=product(c.source),b=product(c.target);return `<section class="panel" style="padding:14px"><div style="display:flex;align-items:center;gap:8px"><img src="${esc(img(a.id))}" alt="" style="width:38%;max-height:100px;object-fit:contain" /><span style="font-size:23px;color:var(--accent)">→</span><img src="${esc(img(b.id))}" alt="" style="width:38%;max-height:100px;object-fit:contain" /></div><strong style="font-size:13px">${esc(a.name)}</strong><p class="small-muted">1 × ${esc(a.size)} = ${c.ratio} × ${esc(b.size)}</p><p class="small-muted">Available bulk: ${qty(a.id)} · Small: ${qty(b.id)}</p><button class="btn tiny" data-action="new-transfer" data-source="${esc(a.id)}" style="margin-top:13px">Convert stock</button></section>`}).join('')}</div>`}
 function activity(){return title('AUDIT TRAIL','Stock movement history','Every received, adjusted, converted and collected item is recorded.',btn('↓ Export history CSV','export-history',''))+
@@ -74,20 +92,50 @@ function modal(body,heading,wide=false){document.querySelector('#modal-host').in
 function closeModal(){document.querySelector('#modal-host').innerHTML='';ui.draftLines=[];ui.unmatched=[];}
 function options(selected=''){return PRODUCTS.map(p=>`<option value="${esc(p.id)}" ${p.id===selected?'selected':''}>${esc(formatLabel(p))}</option>`).join('')}
 function openStock(id='',mode='receive'){let p=product(id)||PRODUCTS[0];modal(`<form id="stock-form"><div class="field"><label for="stock-product">Product</label><select id="stock-product">${options(p.id)}</select></div><div class="form-grid"><div class="field"><label for="stock-operation">Action</label><select id="stock-operation"><option value="in" ${mode==='receive'?'selected':''}>Receive / add</option><option value="out">Remove / write-off</option><option value="count">Set exact stock count</option></select></div><div class="field"><label for="stock-quantity">Quantity (whole packs)</label><input id="stock-quantity" type="number" min="0" step="1" value="1" required /></div></div><div class="field"><label for="stock-reason">Reason / reference</label><input id="stock-reason" placeholder="e.g. Supplier delivery, stocktake, damaged" maxlength="220" required /></div><div class="notice">Current balance: <strong id="stock-current">${qty(p.id)} ${esc(p.unit)}</strong>All changes will appear in stock history.</div><div class="modal-actions">${btn('Cancel','close-modal','')}<button type="submit" class="btn primary">Save stock movement</button></div></form>`,mode==='receive'?'Receive stock':'Adjust stock');}
+function normaliseOrderText(str){
+ return String(str||'').toLowerCase().replace(/(\d+)\s*(millilitres?|milliliters?)\b/g,'$1 ml').replace(/(\d+)\s*(litres?|liters?)\b/g,'$1 l').replace(/(\d+)\s*(ml|l)\b/g,'$1 $2').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+}
 function parseWhatsApp(raw){
- const lines=raw.split(/\n|;/).map(l=>l.trim()).filter(Boolean);const chosen=[];const unmatched=[];
- const ordered=PRODUCTS.map(p=>({...p,finds:[formatLabel(p).toLowerCase().replace(/[—–-]/g,' '),...p.keywords]}));
- for(const line of lines){const low=line.toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();let result=null,score=0;
-  for(const p of ordered){for(const k of p.finds){const key=k.toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();if(low.includes(key)&&key.length>score){result=p;score=key.length}}}
+ const input=String(raw||'').split(/\n|;/).map(l=>l.trim()).filter(Boolean);
+ const found=new Map(),unmatched=[];
+ const ordered=PRODUCTS.map(p=>({...p,finds:[formatLabel(p),...p.keywords].map(normaliseOrderText)}));
+ for(let line of input){
+  if(/^(?:from|sender|manager)\s*:/i.test(line))continue;
+  if(/^\s*\[[^\]]+\]\s*[^:\n]{2,65}:\s*/.test(line))line=line.replace(/^\s*\[[^\]]+\]\s*[^:\n]{2,65}:\s*/,'');
+  const low=normaliseOrderText(line);let result=null,score=0;
+  for(const p of ordered){for(const k of p.finds){if(k&&low.includes(k)&&k.length>score){result=p;score=k.length}}}
   if(!result){unmatched.push(line);continue}
   const leading=low.match(/^(\d+)\s*(?:x|of|bottles?|buckets?|containers?|rolls?|packs?|spools?|pcs?|pieces?)?\s/);
   const trailing=low.match(/(?:x|qty|quantity)\s*(\d+)\s*$/);
   const amount=leading?Number(leading[1]):trailing?Number(trailing[1]):1;
-  if(!Number.isSafeInteger(amount)||amount<1||amount>9999){unmatched.push(line);continue}
-  const existing=chosen.find(x=>x.productId===result.id);if(existing)existing.quantity+=amount;else chosen.push({productId:result.id,quantity:amount});
+  if(!Number.isSafeInteger(amount)||amount<1||amount>9999||((found.get(result.id)||0)+amount)>9999){unmatched.push(line);continue}
+  found.set(result.id,(found.get(result.id)||0)+amount);
  }
- return {lines:chosen,unmatched};
+ return {lines:[...found].map(([productId,quantity])=>({productId,quantity})),unmatched};
 }
+function capturedManager(raw){
+ const msg=String(raw||'');
+ const named=msg.match(/(?:^|\n)\s*(?:From|Manager|Sender)\s*:\s*([^\n]{2,75})/i);
+ const header=msg.match(/^\s*\[[^\]]+\]\s*([^:\n]{2,70})\s*:/);
+ return (named?.[1]||header?.[1]||'').trim().slice(0,100);
+}
+function capturePastedOrder(raw){
+ const message=String(raw||'').trim();
+ if(!message){notify('Paste a WhatsApp order first.',true);return}
+ if(message.length>6000){notify('This message is too long. Copy just the order.',true);return}
+ const managerInput=document.querySelector('#quick-manager'),phoneInput=document.querySelector('#quick-phone'),siteInput=document.querySelector('#quick-site');
+ const manager=(managerInput?.value||'').trim()||capturedManager(message);
+ const phone=(phoneInput?.value||'').trim(),site=(siteInput?.value||'').trim();
+ ui.captureMeta={manager:managerInput?.value||'',phone,site};
+ const duplicate=data.tickets.find(t=>t.source==='manual-whatsapp-paste'&&t.rawMessage===message&&t.manager===(manager||'Manager not specified')&&t.site===site&&Date.now()-Date.parse(t.createdAt)<60000);
+ if(duplicate){navigate('orders');ticketDetails(duplicate.id);notify('This message was recently captured. Opened the existing ticket.');return}
+ const parsed=parseWhatsApp(message),timestamp=new Date().toISOString();
+ const ticketId=`SC-${timestamp.slice(0,10).replace(/-/g,'')}-${String(data.nextTicket++).padStart(4,'0')}`;
+ const t={id:ticketId,manager:manager||'Manager not specified',phone,site,rawMessage:message,notes:'',lines:parsed.lines,reviewLines:parsed.unmatched,status:'review',source:'manual-whatsapp-paste',createdAt:timestamp,updatedAt:timestamp};
+ data.tickets.unshift(t);save();ui.ticketFilter='All';navigate('orders');ticketDetails(t.id);
+ notify(`Ticket ${ticketId} created instantly — check ${parsed.lines.length} matched product(s).`);
+}
+
 function draftLineHTML(line,i){return `<div class="line-entry"><select aria-label="Product ${i+1}" class="order-product">${options(line.productId)}</select><input aria-label="Quantity ${i+1}" class="order-qty" type="number" min="1" max="9999" value="${esc(line.quantity)}" required /><button type="button" class="round-btn" data-action="remove-line" data-index="${i}" title="Remove line">×</button></div>`}
 function syncDraft(){const rows=[...document.querySelectorAll('#line-host .line-entry')];if(rows.length)ui.draftLines=rows.map(row=>({productId:row.querySelector('.order-product').value,quantity:Number(row.querySelector('.order-qty').value)}));}
 function redrawLines(){const host=document.querySelector('#line-host');if(host)host.innerHTML=ui.draftLines.map(draftLineHTML).join('')}
