@@ -102,8 +102,15 @@ with sync_playwright() as p:
     ctrl.get_by_role("button", name="View ›").first.click()
     ctrl.get_by_role("button", name="✓ Review and confirm ticket").click()
     ctrl.locator("#review-manager").fill("Thabo Manager")
-    for _ in range(2):
-        ctrl.locator('#line-host button[data-action="remove-line"]').last.click()
+    # Lines are shown in catalogue order; keep only Pine gel 5 L (the product in stock).
+    while ctrl.locator("#line-host .line-entry").count() > 1:
+        rows = ctrl.locator("#line-host .line-entry")
+        for i in range(rows.count()):
+            if rows.nth(i).locator(".order-product").input_value() != "pine-gel-5l":
+                rows.nth(i).locator('button[data-action="remove-line"]').click()
+                break
+    assert ctrl.locator("#line-host .order-product").input_value() == "pine-gel-5l"
+    assert ctrl.locator("#line-host .order-qty").input_value() == "2"
     ctrl.get_by_role("button", name="Save and confirm ticket").click()
     expect(ctrl.locator(".modal")).to_contain_text("New request", timeout=15000)
     ctrl.get_by_role("button", name="Start preparing").click()
