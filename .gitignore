@@ -13,3 +13,4 @@ ui-debug.log
 config.local.js
 service-account*.json
 *.pem
+tests/screenshots/

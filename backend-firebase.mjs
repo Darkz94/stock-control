@@ -432,6 +432,8 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
       }
     },
     async signOut() {
+      profileUnsub?.();
+      profileUnsub = null;
       stopData();
       await signOut(auth);
     },

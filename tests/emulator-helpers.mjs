@@ -27,7 +27,15 @@ export const PEOPLE = {
 
 /** Seed users, balances, settings and conversions with rules disabled (as the owner would via setup). */
 export async function seed(env, { onHand = {} } = {}) {
-  await env.clearFirestore();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await env.clearFirestore();
+      break;
+    } catch (e) {
+      if (attempt >= 4) throw e; // emulator can briefly return 500 while a previous test's writes settle
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     for (const [uid, p] of Object.entries(PEOPLE)) {

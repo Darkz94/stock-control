@@ -155,3 +155,11 @@ test("local backend: cancel never touches stock; insufficient stock blocks colle
   await b.changeStatus(ticket.id, "cancelled");
   assert.equal(b._data().counts.mop, 1);
 });
+
+test("firestore.rules product list matches the app catalogue", () => {
+  const rules = require("fs").readFileSync(require("path").join(__dirname, "../firestore.rules"), "utf8");
+  const m = rules.match(/function productIds\(\) \{\s*return \[([^\]]*)\]/);
+  assert.ok(m, "productIds() not found in rules");
+  const ids = m[1].split(",").map((x) => x.trim().replace(/'/g, ""));
+  assert.deepEqual(ids, D.PRODUCTS.map((p) => p.id));
+});

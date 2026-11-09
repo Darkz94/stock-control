@@ -1,6 +1,6 @@
 // Firebase backend tests against the emulator — exercises the same backend-firebase.mjs the app uses,
 // with two or more simulated devices working at the same time. Run: npm run test:rules
-import test, { before, after, beforeEach } from "node:test";
+import test, { before, after, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "firebase/firestore";
 import { createFirebaseBackend } from "../backend-firebase.mjs";
@@ -10,6 +10,11 @@ let env;
 before(async () => (env = await makeEnv()));
 after(async () => env?.cleanup());
 beforeEach(async () => seed(env, { onHand: { mop: 3, "pine-gel-5l": 10, "black-bags": 10, "two-stroke-500ml": 10 } }));
+const open = [];
+afterEach(async () => {
+  // Stop every simulated device's live listeners before the database is cleared for the next test.
+  await Promise.all(open.splice(0).map((b) => b.signOut().catch(() => {})));
+});
 
 const memoryStorage = () => {
   const m = new Map();
@@ -21,8 +26,9 @@ async function device(uid, { online = () => true } = {}) {
   const db = env.authenticatedContext(uid).firestore();
   const sdk = { ...fs, onAuthStateChanged: (_auth, cb) => (setTimeout(() => cb({ uid, email: uid + "@example.test" }), 0), () => {}), signInWithEmailAndPassword: async () => {}, signOut: async () => {}, sendPasswordResetEmail: async () => {} };
   const b = createFirebaseBackend({ sdk, domain: D, auth: {}, db, storage: memoryStorage(), isOnline: online, timeoutMs: 20000 });
+  open.push(b);
   await b.init();
-  await waitFor(b, (s) => s.authState === "ready" && s.balancesExists !== null);
+  await waitFor(b, (s) => s.authState === "ready" && s.settingsExists !== null && (s.user?.role === "site-manager" || s.balancesExists !== null));
   return b;
 }
 async function waitFor(b, pred, ms = 8000) {

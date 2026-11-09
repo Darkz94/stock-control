@@ -13,8 +13,8 @@ rules_version = '2';
 //     movement id is deterministic and movements can never be updated, so a ticket cannot be issued twice.
 //   * Every ticket and user change must create a new /auditLogs entry in the same write.
 //
-// Rules cannot loop, so per-key checks are unrolled for up to 20 product lines per ticket/movement.
-// The catalogue has 16 products; raise MAX by adding lines to the *Part helpers if it grows past 20.
+// Rules cannot loop, so per-key checks are unrolled (nested, short-circuiting) for up to 20 product
+// lines per ticket/movement. Adding a product means adding its id to productIds() below.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -35,18 +35,17 @@ service cloud.firestore {
     function docId(v) { return v is string && v.matches('^[A-Za-z0-9_-]{6,80}$'); }
     function productKey(k) { return k is string && k.matches('^[a-z0-9][a-z0-9-]{0,39}$'); }
 
-    function qtyAt(m, ks, i, max) {
-      return ks.size() <= i || (productKey(ks[i]) && m[ks[i]] is int && m[ks[i]] >= 1 && m[ks[i]] <= max);
+    // Catalogue product ids (must match domain.js PRODUCTS — a unit test checks this).
+    function productIds() {
+      return ['two-stroke-500ml', 'two-stroke-20l', 'nylon-line', 'pine-gel-5l', 'pine-gel-20l', 'non-selective-20l', 'non-selective-1l', 'selective-20l', 'selective-5l', 'bleach-5l', 'toilet-paper', 'black-bags', 'rake', 'broom', 'mop', 'broom-sticks'];
     }
+    function qOk(m, k, max) { return m[k] is int && m[k] >= 1 && m[k] <= max; }
+    // Rules cannot loop: this nested check stops at the end of the list, so short tickets stay cheap.
     function qtyPart(m, ks, max) {
-      return qtyAt(m, ks, 0, max) && qtyAt(m, ks, 1, max) && qtyAt(m, ks, 2, max) && qtyAt(m, ks, 3, max)
-        && qtyAt(m, ks, 4, max) && qtyAt(m, ks, 5, max) && qtyAt(m, ks, 6, max) && qtyAt(m, ks, 7, max)
-        && qtyAt(m, ks, 8, max) && qtyAt(m, ks, 9, max) && qtyAt(m, ks, 10, max) && qtyAt(m, ks, 11, max)
-        && qtyAt(m, ks, 12, max) && qtyAt(m, ks, 13, max) && qtyAt(m, ks, 14, max) && qtyAt(m, ks, 15, max)
-        && qtyAt(m, ks, 16, max) && qtyAt(m, ks, 17, max) && qtyAt(m, ks, 18, max) && qtyAt(m, ks, 19, max);
+      return (ks.size() == 0 || (qOk(m, ks[0], max) && (ks.size() == 1 || (qOk(m, ks[1], max) && (ks.size() == 2 || (qOk(m, ks[2], max) && (ks.size() == 3 || (qOk(m, ks[3], max) && (ks.size() == 4 || (qOk(m, ks[4], max) && (ks.size() == 5 || (qOk(m, ks[5], max) && (ks.size() == 6 || (qOk(m, ks[6], max) && (ks.size() == 7 || (qOk(m, ks[7], max) && (ks.size() == 8 || (qOk(m, ks[8], max) && (ks.size() == 9 || (qOk(m, ks[9], max) && (ks.size() == 10 || (qOk(m, ks[10], max) && (ks.size() == 11 || (qOk(m, ks[11], max) && (ks.size() == 12 || (qOk(m, ks[12], max) && (ks.size() == 13 || (qOk(m, ks[13], max) && (ks.size() == 14 || (qOk(m, ks[14], max) && (ks.size() == 15 || (qOk(m, ks[15], max) && (ks.size() == 16 || (qOk(m, ks[16], max) && (ks.size() == 17 || (qOk(m, ks[17], max) && (ks.size() == 18 || (qOk(m, ks[18], max) && (ks.size() == 19 || qOk(m, ks[19], max))))))))))))))))))))))))))))))))))))))));
     }
-    // A {productId: positive whole quantity} map with at most 20 entries.
-    function qtyMap(m, max) { return m is map && m.size() <= 20 && qtyPart(m, m.keys(), max); }
+    // A {productId: positive whole quantity} map of catalogue products, at most 20 entries.
+    function qtyMap(m, max) { return m is map && m.size() <= 20 && m.keys().hasOnly(productIds()) && qtyPart(m, m.keys(), max); }
 
     function pad4(n) {
       return n < 10 ? '000' + string(n) : (n < 100 ? '00' + string(n) : (n < 1000 ? '0' + string(n) : string(n)));
@@ -123,13 +122,8 @@ service cloud.firestore {
       return n.get(k, -1) is int && n.get(k, -1) >= 0
         && n.get(k, -1) == o.get(k, 0) - mv.removed.get(k, 0) + mv.added.get(k, 0);
     }
-    function balAt(o, n, mv, i) { return mv.productIds.size() <= i || balKey(o, n, mv, mv.productIds[i]); }
     function balPart(o, n, mv) {
-      return balAt(o, n, mv, 0) && balAt(o, n, mv, 1) && balAt(o, n, mv, 2) && balAt(o, n, mv, 3)
-        && balAt(o, n, mv, 4) && balAt(o, n, mv, 5) && balAt(o, n, mv, 6) && balAt(o, n, mv, 7)
-        && balAt(o, n, mv, 8) && balAt(o, n, mv, 9) && balAt(o, n, mv, 10) && balAt(o, n, mv, 11)
-        && balAt(o, n, mv, 12) && balAt(o, n, mv, 13) && balAt(o, n, mv, 14) && balAt(o, n, mv, 15)
-        && balAt(o, n, mv, 16) && balAt(o, n, mv, 17) && balAt(o, n, mv, 18) && balAt(o, n, mv, 19);
+      return (mv.productIds.size() == 0 || (balKey(o, n, mv, mv.productIds[0]) && (mv.productIds.size() == 1 || (balKey(o, n, mv, mv.productIds[1]) && (mv.productIds.size() == 2 || (balKey(o, n, mv, mv.productIds[2]) && (mv.productIds.size() == 3 || (balKey(o, n, mv, mv.productIds[3]) && (mv.productIds.size() == 4 || (balKey(o, n, mv, mv.productIds[4]) && (mv.productIds.size() == 5 || (balKey(o, n, mv, mv.productIds[5]) && (mv.productIds.size() == 6 || (balKey(o, n, mv, mv.productIds[6]) && (mv.productIds.size() == 7 || (balKey(o, n, mv, mv.productIds[7]) && (mv.productIds.size() == 8 || (balKey(o, n, mv, mv.productIds[8]) && (mv.productIds.size() == 9 || (balKey(o, n, mv, mv.productIds[9]) && (mv.productIds.size() == 10 || (balKey(o, n, mv, mv.productIds[10]) && (mv.productIds.size() == 11 || (balKey(o, n, mv, mv.productIds[11]) && (mv.productIds.size() == 12 || (balKey(o, n, mv, mv.productIds[12]) && (mv.productIds.size() == 13 || (balKey(o, n, mv, mv.productIds[13]) && (mv.productIds.size() == 14 || (balKey(o, n, mv, mv.productIds[14]) && (mv.productIds.size() == 15 || (balKey(o, n, mv, mv.productIds[15]) && (mv.productIds.size() == 16 || (balKey(o, n, mv, mv.productIds[16]) && (mv.productIds.size() == 17 || (balKey(o, n, mv, mv.productIds[17]) && (mv.productIds.size() == 18 || (balKey(o, n, mv, mv.productIds[18]) && (mv.productIds.size() == 19 || balKey(o, n, mv, mv.productIds[19]))))))))))))))))))))))))))))))))))))))));
     }
     function balanceChangeMatchesMovement() {
       let mvId = request.resource.data.lastMovementId;
@@ -137,7 +131,7 @@ service cloud.firestore {
       let o = resource.data.onHand;
       let n = request.resource.data.onHand;
       return docId(mvId) && !exists(mvPath(mvId))
-        && n is map && n.size() <= 200
+        && n is map && n.size() <= 200 && mv.productIds.size() <= 20
         && n.diff(o).affectedKeys().hasOnly(mv.productIds)
         && balPart(o, n, mv);
     }
@@ -262,62 +256,62 @@ service cloud.firestore {
       return d.ticketId == id && ticketShape(d) && stamped(d)
         && d.createdAt == request.time && d.createdBy == uid() && auditBound(d);
     }
-    function affected() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    function ticketCreateOk(id, d) {
+      return newTicketCommon(id, d) && (
+        // 1. Stock controller pastes a WhatsApp order: saved instantly in review with the raw text.
+        (d.source == 'manual-whatsapp-paste' && d.status == 'review' && d.rawMessage.size() >= 1 && isStaff() && counterOk(id, d))
+        // 2. Stock controller enters a complete ticket manually.
+        || (d.source == 'manual-entry' && d.status == 'new' && confirmed(d) && isStaff() && counterOk(id, d))
+        // 3. Phase 2: signed-in site manager submits the in-app order form for themself.
+        || (d.source == 'in-app-order' && d.status == 'new' && confirmed(d) && isManager()
+          && d.managerUid == uid() && d.manager == userDoc().displayName
+          && d.rawMessage == '' && d.reviewLines.size() == 0
+          && (d.site == '' || d.site in userDoc().sites) && counterOk(id, d))
+        // 4. Admin imports a ticket from a local-prototype backup (deterministic id prevents duplicates).
+        || (d.source == 'legacy-import' && id.matches('^LEGACY-[A-Za-z0-9_-]{1,60}$')
+          && d.status in ['review', 'collected', 'cancelled'] && isAdmin())
+      );
+    }
+    function ticketUpdateOk(id) {
+      let o = resource.data;
+      let n = request.resource.data;
+      let a = n.diff(o).affectedKeys();
+      return o.status in ['review', 'new', 'preparing', 'ready']
+        && !a.hasAny(['ticketId', 'seq', 'day', 'source', 'rawMessage', 'pasteKey', 'createdAt', 'createdBy', 'legacyTicketId', 'legacyCreatedAt'])
+        && stamped(n) && ticketShape(n) && auditBound(n)
+        && (
+          // Review / edit: same ticket, corrected details. review -> new on confirmation.
+          (a.hasOnly(['manager', 'managerUid', 'phone', 'site', 'notes', 'items', 'reviewLines', 'reviewedAt', 'reviewedBy', 'status', 'updatedAt', 'updatedBy', 'lastAuditId'])
+            && n.reviewedAt == request.time && n.reviewedBy == uid()
+            && n.reviewLines.size() == 0 && confirmed(n)
+            && (n.status == o.status || (o.status == 'review' && n.status == 'new')))
+          // Preparation progress (never from review).
+          || (a.hasOnly(['status', 'updatedAt', 'updatedBy', 'lastAuditId']) && confirmed(o)
+            && ((o.status == 'new' && n.status in ['preparing', 'ready'])
+                || (o.status == 'preparing' && n.status == 'ready')))
+          // Collection: ready -> collected, bound to the one-time stock movement.
+          || (a.hasOnly(['status', 'updatedAt', 'updatedBy', 'lastAuditId', 'collectedAt', 'collectedBy', 'collectionMovementId'])
+            && o.status == 'ready' && n.status == 'collected' && confirmed(o)
+            && n.collectedAt == request.time && n.collectedBy == uid()
+            && n.collectionMovementId == id + '_collect'
+            && !exists(mvPath(id + '_collect'))
+            && getAfter(mvPath(id + '_collect')).data.removed == o.items)
+          // Cancellation of an active ticket: no stock change.
+          || (a.hasOnly(['status', 'updatedAt', 'updatedBy', 'lastAuditId', 'cancelledAt', 'cancelledBy', 'cancelReason'])
+            && n.status == 'cancelled'
+            && n.cancelledAt == request.time && n.cancelledBy == uid()
+            && text(n.cancelReason, 300))
+        );
+    }
 
     match /tickets/{ticketId} {
       allow get: if isStaff() || (isManager() && resource.data.managerUid == uid());
       // Managers may only list their own tickets (the query must filter on managerUid == their uid).
       allow list: if isStaff() || (isManager() && resource.data.managerUid == uid());
 
-      allow create: if
-        // 1. Stock controller pastes a WhatsApp order: saved instantly in review with the raw text.
-        (isStaff() && newTicketCommon(ticketId, request.resource.data) && counterOk(ticketId, request.resource.data)
-          && request.resource.data.source == 'manual-whatsapp-paste' && request.resource.data.status == 'review'
-          && request.resource.data.rawMessage.size() >= 1)
-        // 2. Stock controller enters a complete ticket manually.
-        || (isStaff() && newTicketCommon(ticketId, request.resource.data) && counterOk(ticketId, request.resource.data)
-          && request.resource.data.source == 'manual-entry' && request.resource.data.status == 'new'
-          && confirmed(request.resource.data))
-        // 3. Phase 2: signed-in site manager submits the in-app order form for themself.
-        || (isManager() && newTicketCommon(ticketId, request.resource.data) && counterOk(ticketId, request.resource.data)
-          && request.resource.data.source == 'in-app-order' && request.resource.data.status == 'new'
-          && request.resource.data.managerUid == uid() && request.resource.data.manager == userDoc().displayName
-          && request.resource.data.rawMessage == '' && request.resource.data.reviewLines.size() == 0
-          && (request.resource.data.site == '' || request.resource.data.site in userDoc().sites)
-          && confirmed(request.resource.data))
-        // 4. Admin imports a ticket from a local-prototype backup (deterministic id prevents duplicates).
-        || (isAdmin() && newTicketCommon(ticketId, request.resource.data)
-          && ticketId.matches('^LEGACY-[A-Za-z0-9_-]{1,60}$') && request.resource.data.source == 'legacy-import'
-          && request.resource.data.status in ['review', 'collected', 'cancelled']);
-
-      allow update: if isStaff()
-        && resource.data.status in ['review', 'new', 'preparing', 'ready']
-        && ticketShape(request.resource.data) && stamped(request.resource.data) && auditBound(request.resource.data)
-        && !affected().hasAny(['ticketId', 'seq', 'day', 'source', 'rawMessage', 'pasteKey', 'createdAt', 'createdBy', 'legacyTicketId', 'legacyCreatedAt'])
-        && (
-          // Review / edit: same ticket, corrected details. review -> new on confirmation.
-          (affected().hasOnly(['manager', 'managerUid', 'phone', 'site', 'notes', 'items', 'reviewLines', 'reviewedAt', 'reviewedBy', 'status', 'updatedAt', 'updatedBy', 'lastAuditId'])
-            && request.resource.data.reviewedAt == request.time && request.resource.data.reviewedBy == uid()
-            && request.resource.data.reviewLines.size() == 0 && confirmed(request.resource.data)
-            && (request.resource.data.status == resource.data.status
-                || (resource.data.status == 'review' && request.resource.data.status == 'new')))
-          // Preparation progress (never from review).
-          || (affected().hasOnly(['status', 'updatedAt', 'updatedBy', 'lastAuditId']) && confirmed(resource.data)
-            && ((resource.data.status == 'new' && request.resource.data.status in ['preparing', 'ready'])
-                || (resource.data.status == 'preparing' && request.resource.data.status == 'ready')))
-          // Collection: ready -> collected, bound to the one-time stock movement.
-          || (affected().hasOnly(['status', 'updatedAt', 'updatedBy', 'lastAuditId', 'collectedAt', 'collectedBy', 'collectionMovementId'])
-            && resource.data.status == 'ready' && request.resource.data.status == 'collected' && confirmed(resource.data)
-            && request.resource.data.collectedAt == request.time && request.resource.data.collectedBy == uid()
-            && request.resource.data.collectionMovementId == ticketId + '_collect'
-            && !exists(mvPath(ticketId + '_collect'))
-            && getAfter(mvPath(ticketId + '_collect')).data.removed == resource.data.items)
-          // Cancellation of an active ticket: no stock change.
-          || (affected().hasOnly(['status', 'updatedAt', 'updatedBy', 'lastAuditId', 'cancelledAt', 'cancelledBy', 'cancelReason'])
-            && request.resource.data.status == 'cancelled'
-            && request.resource.data.cancelledAt == request.time && request.resource.data.cancelledBy == uid()
-            && text(request.resource.data.cancelReason, 300))
-        );
+      allow create: if ticketCreateOk(ticketId, request.resource.data);
+      allow update: if isStaff() && ticketUpdateOk(ticketId);
       allow delete: if false;
     }
 
