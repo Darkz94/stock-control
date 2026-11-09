@@ -14,6 +14,7 @@ const TX_TIMEOUT_MS = 25000;
 
 export class UserError extends Error {}
 export class OfflineError extends UserError {}
+class RetryableConflict extends Error {}
 
 export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null, isOnline = () => true, timeoutMs = TX_TIMEOUT_MS }) {
   const {
@@ -216,6 +217,7 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
 
   function friendlyError(e) {
     if (e instanceof UserError) return e;
+    if (e instanceof RetryableConflict) return new UserError("Several devices saved at the same moment. Please try again.");
     const code = e?.code || "";
     if (code === "permission-denied") return new UserError("The server refused this change. Your role may not allow it, or the record changed on another device — check the latest data and try again.");
     if (code === "unavailable" || code === "deadline-exceeded") return new OfflineError("Could not reach the server. Nothing was confirmed — check your connection and try again.");
@@ -247,7 +249,7 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
           }),
         ]);
       } catch (e) {
-        if (e?.code === "permission-denied" && attempt < 8 && Date.now() < deadline) {
+        if ((e?.code === "permission-denied" || e instanceof RetryableConflict) && attempt < 8 && Date.now() < deadline) {
           await new Promise((r) => setTimeout(r, 50 * attempt + Math.random() * 200 * attempt));
           continue;
         }
@@ -302,7 +304,7 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
       const r = await reserveTicketId(t);
       // Belt and braces for staff; managers may not read tickets that are not theirs (the counter
       // plus the rules already guarantee the number is unused).
-      if (isStaff() && (await t.get(r.ticketRef)).exists()) throw new UserError("Ticket number clash — please try again.");
+      if (isStaff() && (await t.get(r.ticketRef)).exists()) throw new RetryableConflict("ticket number taken by a concurrent device");
       const auditId = audit(t, "ticket.created", "ticket", r.ticketId, `Ticket created (${fields.source})`, { status: fields.status, source: fields.source });
       t.set(r.counterRef, { next: r.seq, updatedAt: serverTimestamp() });
       t.set(r.ticketRef, { ...baseTicket(r, fields), lastAuditId: auditId });
