@@ -27,3 +27,31 @@ jobs:
         run: npm run test:logic
       - name: Firestore rules + backend tests (emulator)
         run: npm run test:rules
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - run: pip install playwright==1.48.0 && python -m playwright install --with-deps chromium
+      - name: Local prototype smoke test
+        run: python tests/smoke.py
+      - name: Firebase mode end-to-end (emulators)
+        run: npx firebase emulators:exec --only auth,firestore,hosting --project demo-stock-control "python tests/e2e_firebase.py"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: tests/screenshots/

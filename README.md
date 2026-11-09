@@ -39,20 +39,46 @@ Open `http://localhost:8080` in a browser. On Android, host on HTTPS and use the
 
 Review the detected products and quantities carefully; the parser is not AI and cannot interpret every message. Any unrecognised lines are flagged for manual checking.
 
-## Important prototype limits
+## Backends: local prototype or shared Firebase
 
-**This is NOT yet a shared production stock-control system.** Storage uses `localStorage` on each browser/device. One device cannot see other devices' live changes. The initial quantity for every product is zero. There is no staff authentication, access control, shared server database, WhatsApp chat access, automatic messaging or cloud backup. Opening WhatsApp drafts is **not** equivalent to sending a message. The production app must not publish actual phone numbers, private stock details or manager information in a public repository.
+`config.js` selects the backend. The committed default is **`backend: "local"`**, the original single-device prototype: data stays in one browser's `localStorage`, there is no login, and one device cannot see another's changes. The initial quantity for every product is zero. Keep a JSON backup.
 
-To upgrade to a team app, implement a secure backend (e.g. Firebase Authentication + Firestore), restrict access by verified staff/manager roles with security rules, move stock changes to atomic server transactions and implement audit trails. Keep ordinary WhatsApp manual: use share/click-to-chat links, with no automatic receiving or sending. If managers need automatic ticket creation without copying WhatsApp messages, provide an authenticated **in-app order form** backed by Firebase. See [Normal WhatsApp workflow](docs/WHATSAPP_INTEGRATION.md).
+**`backend: "firebase"`** (branch `firebase-backend`) turns it into a shared team app:
+
+- Email/password sign-in with server-verified roles: **admin**, **stock controller**, **site manager**.
+- Tickets, stock and history are shared live across every signed-in device, with Firestore transactions for each change. The app only shows a change as saved once the server confirms it.
+- `firestore.rules` enforce the stock rules on the server: no negative stock, every balance change is backed by an immutable movement, a ticket is issued exactly once, review tickets cannot be collected, the original WhatsApp text cannot be altered, and every ticket and staff change is audited.
+- Pasting offline keeps the order on the device in a clearly marked *Waiting to sync* list until the connection returns. Stock changes are blocked offline.
+- Site managers can place orders in the app (Phase 2). Normal WhatsApp stays human-to-human.
+- An admin can import a prototype JSON backup, with a preview first and no duplicates on re-import.
+
+Read in this order: [Design notes](docs/FIREBASE_DESIGN.md) → [Owner setup checklist](docs/FIREBASE_SETUP.md) → [Testing before deployment](docs/FIREBASE_TESTING.md). Nothing is deployed, billed or sent without the owner's approval.
+
+Opening a WhatsApp draft is **not** equivalent to sending a message. Never commit real phone numbers, pasted messages, service-account keys or project secrets; the repository is public.
+
+## Tests
+
+```sh
+npm ci
+npm test               # parser, ticket rules, local backend (Node only)
+npm run test:rules     # Firestore emulator: security rules + multi-device backend tests (needs Java 21)
+python3 tests/smoke.py # browser smoke test of the local prototype (Playwright)
+```
+
+GitHub Actions runs all of these, plus a Firebase-mode browser test against the emulators, on every push.
 
 ## File layout
 
-- `index.html` — single-page application shell
-- `styles.css` — mobile-first interface
-- `app.js` — stock catalogue, tickets, conversions, parser, WhatsApp drafts, exports
+- `index.html`, `styles.css`, `app.js` — single-page application and UI
+- `config.js` — choose `local` or `firebase` backend
+- `domain.js` — catalogue, WhatsApp parser, ticket transitions and stock rules shared by both backends
+- `backend-local.js` — localStorage prototype backend
+- `backend-firebase.mjs`, `firebase-loader.mjs` — Firebase Auth + Firestore backend (SDK loaded only in Firebase mode)
+- `firestore.rules`, `firestore.indexes.json`, `firebase.json` — Firebase security rules, indexes and emulator/hosting config
 - `assets/*.webp` — individual product images, generated for this project
 - `manifest.webmanifest`, `sw.js`, `icon.svg` — PWA installation and offline asset caching
-- `docs/WHATSAPP_INTEGRATION.md` — normal WhatsApp workflow and Firebase-backed in-app ordering alternative
+- `tests/` — Node, emulator and browser tests
+- `docs/` — WhatsApp workflow, Firebase design, setup and testing guides
 
 ## Data/stock rules
 

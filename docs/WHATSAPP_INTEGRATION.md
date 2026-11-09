@@ -21,7 +21,7 @@ The `https://wa.me/<international-number>?text=<encoded-message>` URL opens the 
 
 ## Alternative if the operator wants orders to appear without copying WhatsApp
 
-With Firebase connected, add an **authenticated manager order form** directly in the stock-control app:
+With Firebase connected (`backend: "firebase"`), site managers get an **authenticated in-app order form** (implemented on the `firebase-backend` branch):
 1. Manager signs in, chooses products, sizes and quantities, and submits.
 2. Firestore securely creates a new ticket, visible immediately to authorised stock controllers.
 3. Manager and controller may still chat via normal WhatsApp separately.
@@ -31,8 +31,7 @@ This provides fully automatic ticket creation on form submission **without requi
 
 ## Security and safety
 
-- The current prototype is localStorage-only and not an authenticated multi-user system.
+- The local prototype mode is localStorage-only and not an authenticated multi-user system. Firebase mode adds sign-in, role-based Firestore rules and transactional stock changes (see FIREBASE_DESIGN.md).
 - The repository is public. Do not commit real manager phone numbers, personal conversations, stock details, Firebase private credentials, or API secrets.
-- Before team use, implement Firebase Authentication, role-based Firestore rules and server-side inventory transactions.
 - Do not use a WhatsApp draft as proof of sending; collection status and messaging are separate.
 - Product images are illustrations, not chemical safety labels. All physical chemical work follows product labels, safety data sheets and workplace policy.
