@@ -5,3 +5,11 @@ node_modules/
 !.env.example
 *.log
 *.bak
+.firebaserc
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+*-debug.log
+config.local.js
+service-account*.json
+*.pem

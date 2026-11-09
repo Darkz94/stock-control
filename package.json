@@ -1,0 +1,21 @@
+{
+  "name": "stock-control",
+  "private": true,
+  "version": "2.0.0-dev",
+  "description": "Stock Control PWA with optional Firebase backend. Dev dependencies are only for tests and emulators; the app itself has no build step.",
+  "scripts": {
+    "test": "npm run test:logic",
+    "test:logic": "node tests/logic.js && node --test tests/domain.test.js",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-stock-control \"node --test --test-concurrency=1 tests/rules.test.mjs tests/backend.test.mjs\"",
+    "test:all": "npm run test:logic && npm run test:rules",
+    "emulators": "firebase emulators:start --project demo-stock-control",
+    "seed:emulator": "node scripts/seed-emulator.mjs",
+    "serve": "python3 -m http.server 8080"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.1.0",
+    "firebase-tools": "15.35.0"
+  },
+  "engines": { "node": ">=20" }
+}

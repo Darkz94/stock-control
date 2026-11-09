@@ -1,0 +1,29 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, firebase-backend]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Logic and parser tests
+        run: npm run test:logic
+      - name: Firestore rules + backend tests (emulator)
+        run: npm run test:rules

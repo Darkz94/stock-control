@@ -1,0 +1,343 @@
+rules_version = '2';
+
+// Stock Control — Firestore security rules.
+//
+// Deny by default. Roles come ONLY from /users/{uid} documents that an admin writes (the first admin
+// is created by the owner in the Firebase console). Nothing the browser claims about itself is trusted.
+//
+// Stock integrity is enforced here, not just in the app:
+//   * /inventory/balances can only change together with a NEW, immutable /stockMovements doc written in
+//     the same transaction, and every changed balance must equal old - removed + added, and be >= 0.
+//   * A ticket can only become "collected" from "ready", together with the movement
+//     stockMovements/{ticketId}_collect whose `removed` map equals the ticket's items exactly. That
+//     movement id is deterministic and movements can never be updated, so a ticket cannot be issued twice.
+//   * Every ticket and user change must create a new /auditLogs entry in the same write.
+//
+// Rules cannot loop, so per-key checks are unrolled for up to 20 product lines per ticket/movement.
+// The catalogue has 16 products; raise MAX by adding lines to the *Part helpers if it grows past 20.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- identity & roles ----------
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function hasRole(roles) { return signedIn() && userDoc().active == true && userDoc().role in roles; }
+    function isAdmin() { return hasRole(['admin']); }
+    function isStaff() { return hasRole(['admin', 'stock-controller']); }
+    function isManager() { return hasRole(['site-manager']); }
+    function isActiveUser() { return hasRole(['admin', 'stock-controller', 'site-manager']); }
+
+    // ---------- generic validators ----------
+    function text(v, max) { return v is string && v.size() <= max; }
+    function optText(v, max) { return v == null || text(v, max); }
+    function docId(v) { return v is string && v.matches('^[A-Za-z0-9_-]{6,80}$'); }
+    function productKey(k) { return k is string && k.matches('^[a-z0-9][a-z0-9-]{0,39}$'); }
+
+    function qtyAt(m, ks, i, max) {
+      return ks.size() <= i || (productKey(ks[i]) && m[ks[i]] is int && m[ks[i]] >= 1 && m[ks[i]] <= max);
+    }
+    function qtyPart(m, ks, max) {
+      return qtyAt(m, ks, 0, max) && qtyAt(m, ks, 1, max) && qtyAt(m, ks, 2, max) && qtyAt(m, ks, 3, max)
+        && qtyAt(m, ks, 4, max) && qtyAt(m, ks, 5, max) && qtyAt(m, ks, 6, max) && qtyAt(m, ks, 7, max)
+        && qtyAt(m, ks, 8, max) && qtyAt(m, ks, 9, max) && qtyAt(m, ks, 10, max) && qtyAt(m, ks, 11, max)
+        && qtyAt(m, ks, 12, max) && qtyAt(m, ks, 13, max) && qtyAt(m, ks, 14, max) && qtyAt(m, ks, 15, max)
+        && qtyAt(m, ks, 16, max) && qtyAt(m, ks, 17, max) && qtyAt(m, ks, 18, max) && qtyAt(m, ks, 19, max);
+    }
+    // A {productId: positive whole quantity} map with at most 20 entries.
+    function qtyMap(m, max) { return m is map && m.size() <= 20 && qtyPart(m, m.keys(), max); }
+
+    function pad4(n) {
+      return n < 10 ? '000' + string(n) : (n < 100 ? '00' + string(n) : (n < 1000 ? '0' + string(n) : string(n)));
+    }
+
+    // ---------- audit binding ----------
+    function auditPath(id) { return /databases/$(database)/documents/auditLogs/$(id); }
+    // The write must create a brand-new audit entry named by lastAuditId in the same request.
+    function auditBound(d) {
+      return docId(d.lastAuditId) && !exists(auditPath(d.lastAuditId)) && existsAfter(auditPath(d.lastAuditId));
+    }
+
+    // =====================================================================
+    // users/{uid}: role, active flag, contact + site assignment. Admin-managed.
+    // =====================================================================
+    match /users/{userId} {
+      function validUser(d) {
+        return d.keys().hasOnly(['role', 'active', 'displayName', 'email', 'phone', 'sites', 'updatedAt', 'updatedBy', 'lastAuditId'])
+          && d.role in ['admin', 'stock-controller', 'site-manager']
+          && d.active is bool
+          && text(d.displayName, 100) && d.displayName.size() >= 1
+          && optText(d.email, 200) && optText(d.phone, 30)
+          && d.sites is list && d.sites.size() <= 30
+          && d.updatedAt == request.time && d.updatedBy == uid();
+      }
+      allow read: if signedIn() && (userId == uid() || isStaff());
+      // Admins cannot demote or deactivate themselves (prevents locking every admin out).
+      allow create, update: if isAdmin() && validUser(request.resource.data) && auditBound(request.resource.data)
+        && (userId != uid() || (request.resource.data.role == 'admin' && request.resource.data.active == true));
+      allow delete: if false;
+    }
+
+    // =====================================================================
+    // products/{productId}: catalogue reference data (the app ships the approved catalogue + images).
+    // =====================================================================
+    match /products/{productId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin() && productKey(productId)
+        && request.resource.data.keys().hasOnly(['name', 'size', 'group', 'unit', 'img', 'active', 'sortOrder', 'updatedAt'])
+        && text(request.resource.data.name, 80) && text(request.resource.data.size, 80)
+        && text(request.resource.data.group, 60) && text(request.resource.data.unit, 30)
+        && text(request.resource.data.img, 80) && request.resource.data.active is bool
+        && request.resource.data.sortOrder is int && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // =====================================================================
+    // settings/app (company name, low-stock threshold) and settings/conversions (pack ratios).
+    // Non-secret configuration only.
+    // =====================================================================
+    match /settings/{settingId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin() && (
+        (settingId == 'app'
+          && request.resource.data.keys().hasOnly(['company', 'lowThreshold', 'updatedAt', 'updatedBy'])
+          && text(request.resource.data.company, 90) && request.resource.data.company.size() >= 1
+          && request.resource.data.lowThreshold is int && request.resource.data.lowThreshold >= 0 && request.resource.data.lowThreshold <= 99999
+          && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == uid())
+        || (settingId == 'conversions'
+          && request.resource.data.keys().hasOnly(['pairs', 'updatedAt', 'updatedBy'])
+          && request.resource.data.pairs is map && request.resource.data.pairs.size() <= 20
+          && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == uid())
+      );
+      allow delete: if false;
+    }
+
+    // =====================================================================
+    // inventory/balances: { onHand: {productId: wholePacks}, version, lastMovementId, updatedAt, updatedBy }
+    // =====================================================================
+    function mvPath(id) { return /databases/$(database)/documents/stockMovements/$(id); }
+    function balancesPath() { return /databases/$(database)/documents/inventory/balances; }
+
+    function balKey(o, n, mv, k) {
+      return n.get(k, -1) is int && n.get(k, -1) >= 0
+        && n.get(k, -1) == o.get(k, 0) - mv.removed.get(k, 0) + mv.added.get(k, 0);
+    }
+    function balAt(o, n, mv, i) { return mv.productIds.size() <= i || balKey(o, n, mv, mv.productIds[i]); }
+    function balPart(o, n, mv) {
+      return balAt(o, n, mv, 0) && balAt(o, n, mv, 1) && balAt(o, n, mv, 2) && balAt(o, n, mv, 3)
+        && balAt(o, n, mv, 4) && balAt(o, n, mv, 5) && balAt(o, n, mv, 6) && balAt(o, n, mv, 7)
+        && balAt(o, n, mv, 8) && balAt(o, n, mv, 9) && balAt(o, n, mv, 10) && balAt(o, n, mv, 11)
+        && balAt(o, n, mv, 12) && balAt(o, n, mv, 13) && balAt(o, n, mv, 14) && balAt(o, n, mv, 15)
+        && balAt(o, n, mv, 16) && balAt(o, n, mv, 17) && balAt(o, n, mv, 18) && balAt(o, n, mv, 19);
+    }
+    function balanceChangeMatchesMovement() {
+      let mvId = request.resource.data.lastMovementId;
+      let mv = getAfter(mvPath(mvId)).data;
+      let o = resource.data.onHand;
+      let n = request.resource.data.onHand;
+      return docId(mvId) && !exists(mvPath(mvId))
+        && n is map && n.size() <= 200
+        && n.diff(o).affectedKeys().hasOnly(mv.productIds)
+        && balPart(o, n, mv);
+    }
+
+    match /inventory/{docName} {
+      allow read: if isStaff();
+      allow create: if isAdmin() && docName == 'balances'
+        && request.resource.data.keys().hasOnly(['onHand', 'version', 'lastMovementId', 'updatedAt', 'updatedBy'])
+        && request.resource.data.onHand == {} && request.resource.data.version == 0
+        && request.resource.data.lastMovementId == null
+        && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == uid();
+      allow update: if isStaff() && docName == 'balances'
+        && request.resource.data.keys().hasOnly(['onHand', 'version', 'lastMovementId', 'updatedAt', 'updatedBy'])
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == uid()
+        && balanceChangeMatchesMovement();
+      allow delete: if false;
+    }
+
+    // =====================================================================
+    // stockMovements/{id}: immutable signed movement { kind, added, removed, productIds, reason, ticketId, actorUid, at }
+    // =====================================================================
+    function ticketPath(id) { return /databases/$(database)/documents/tickets/$(id); }
+
+    function movementKindOk(mvId, d) {
+      return (d.kind == 'receive' && d.removed.size() == 0 && d.added.size() == 1 && d.ticketId == null)
+        || (d.kind == 'write-off' && d.added.size() == 0 && d.removed.size() == 1 && d.ticketId == null)
+        || (d.kind == 'count' && d.added.size() + d.removed.size() == 1 && d.ticketId == null)
+        || (d.kind == 'conversion' && d.ticketId == null && conversionOk(d))
+        || (d.kind == 'collection' && collectionMovementOk(mvId, d))
+        || (d.kind == 'import' && isAdmin() && mvId.matches('^import-[A-Za-z0-9_-]{6,72}$') && d.ticketId == null);
+    }
+    function conversionOk(d) {
+      let pairs = get(/databases/$(database)/documents/settings/conversions).data.pairs;
+      let src = d.removed.keys()[0];
+      let tgt = d.added.keys()[0];
+      return d.removed.size() == 1 && d.added.size() == 1
+        && src in pairs && pairs[src].target == tgt && d.added[tgt] == d.removed[src] * pairs[src].ratio;
+    }
+    function collectionMovementOk(mvId, d) {
+      let before = get(ticketPath(d.ticketId)).data;
+      let after = getAfter(ticketPath(d.ticketId)).data;
+      return d.ticketId is string && mvId == d.ticketId + '_collect' && d.added.size() == 0
+        && before.status == 'ready' && after.status == 'collected' && after.collectionMovementId == mvId
+        && d.removed == before.items;
+    }
+
+    match /stockMovements/{mvId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && docId(mvId)
+        && request.resource.data.keys().hasOnly(['kind', 'added', 'removed', 'productIds', 'reason', 'ticketId', 'actorUid', 'at'])
+        && request.resource.data.actorUid == uid() && request.resource.data.at == request.time
+        && text(request.resource.data.reason, 220)
+        && qtyMap(request.resource.data.added, 1000000) && qtyMap(request.resource.data.removed, 1000000)
+        && request.resource.data.added.size() + request.resource.data.removed.size() >= 1
+        && !request.resource.data.added.keys().hasAny(request.resource.data.removed.keys())
+        && request.resource.data.productIds is list
+        && request.resource.data.productIds.size() == request.resource.data.added.size() + request.resource.data.removed.size()
+        && request.resource.data.productIds.hasAll(request.resource.data.added.keys())
+        && request.resource.data.productIds.hasAll(request.resource.data.removed.keys())
+        && getAfter(balancesPath()).data.lastMovementId == mvId
+        && movementKindOk(mvId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // =====================================================================
+    // counters/tickets-YYYYMMDD: per-day ticket sequence. Every increment must create the matching ticket.
+    // =====================================================================
+    match /counters/{counterId} {
+      function dayOf(id) { return id.split('-')[1]; }
+      allow read: if isActiveUser();
+      allow create: if (isStaff() || isManager()) && counterId.matches('^tickets-[0-9]{8}$')
+        && request.resource.data.keys().hasOnly(['next', 'updatedAt'])
+        && request.resource.data.next == 1 && request.resource.data.updatedAt == request.time
+        && existsAfter(ticketPath('SC-' + dayOf(counterId) + '-0001'));
+      allow update: if (isStaff() || isManager()) && counterId.matches('^tickets-[0-9]{8}$')
+        && request.resource.data.keys().hasOnly(['next', 'updatedAt'])
+        && request.resource.data.next == resource.data.next + 1 && request.resource.data.updatedAt == request.time
+        && existsAfter(ticketPath('SC-' + dayOf(counterId) + '-' + pad4(request.resource.data.next)));
+      allow delete: if false;
+    }
+
+    // =====================================================================
+    // pasteLocks/{sha256}: cross-device duplicate-paste guard. Must be written with a new ticket.
+    // =====================================================================
+    match /pasteLocks/{key} {
+      allow read: if isStaff();
+      allow create, update: if isStaff() && key.matches('^[a-f0-9]{64}$')
+        && request.resource.data.keys().hasOnly(['ticketId', 'at', 'by', 'requestId'])
+        && request.resource.data.at == request.time && request.resource.data.by == uid()
+        && docId(request.resource.data.requestId)
+        && request.resource.data.ticketId is string
+        && !exists(ticketPath(request.resource.data.ticketId)) && existsAfter(ticketPath(request.resource.data.ticketId));
+      allow delete: if false;
+    }
+
+    // =====================================================================
+    // tickets/{ticketId}
+    // =====================================================================
+    function ticketShape(d) {
+      return d.keys().hasOnly(['ticketId', 'seq', 'day', 'status', 'source', 'manager', 'managerUid', 'phone', 'site',
+          'notes', 'rawMessage', 'items', 'reviewLines', 'pasteKey', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy',
+          'reviewedAt', 'reviewedBy', 'collectedAt', 'collectedBy', 'collectionMovementId', 'cancelledAt', 'cancelledBy',
+          'cancelReason', 'lastAuditId', 'legacyTicketId', 'legacyCreatedAt'])
+        && d.status in ['review', 'new', 'preparing', 'ready', 'collected', 'cancelled']
+        && d.source in ['manual-whatsapp-paste', 'manual-entry', 'in-app-order', 'legacy-import']
+        && text(d.manager, 100) && optText(d.managerUid, 128) && text(d.phone, 30) && text(d.site, 120)
+        && text(d.notes, 1500) && text(d.rawMessage, 6000)
+        && qtyMap(d.items, 9999)
+        && d.reviewLines is list && d.reviewLines.size() <= 80;
+    }
+    function confirmed(d) {
+      return d.manager.size() >= 1 && d.manager != 'Manager not specified' && d.items.size() >= 1;
+    }
+    function stamped(d) { return d.updatedAt == request.time && d.updatedBy == uid(); }
+    function counterOk(id, d) {
+      let c = getAfter(/databases/$(database)/documents/counters/$('tickets-' + d.day));
+      return d.day is string && d.day.matches('^[0-9]{8}$') && d.seq is int && d.seq >= 1 && d.seq <= 9999
+        && c.data.next == d.seq && id == 'SC-' + d.day + '-' + pad4(d.seq);
+    }
+    function newTicketCommon(id, d) {
+      return d.ticketId == id && ticketShape(d) && stamped(d)
+        && d.createdAt == request.time && d.createdBy == uid() && auditBound(d);
+    }
+    function affected() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    match /tickets/{ticketId} {
+      allow get: if isStaff() || (isManager() && resource.data.managerUid == uid());
+      // Managers may only list their own tickets (the query must filter on managerUid == their uid).
+      allow list: if isStaff() || (isManager() && resource.data.managerUid == uid());
+
+      allow create: if
+        // 1. Stock controller pastes a WhatsApp order: saved instantly in review with the raw text.
+        (isStaff() && newTicketCommon(ticketId, request.resource.data) && counterOk(ticketId, request.resource.data)
+          && request.resource.data.source == 'manual-whatsapp-paste' && request.resource.data.status == 'review'
+          && request.resource.data.rawMessage.size() >= 1)
+        // 2. Stock controller enters a complete ticket manually.
+        || (isStaff() && newTicketCommon(ticketId, request.resource.data) && counterOk(ticketId, request.resource.data)
+          && request.resource.data.source == 'manual-entry' && request.resource.data.status == 'new'
+          && confirmed(request.resource.data))
+        // 3. Phase 2: signed-in site manager submits the in-app order form for themself.
+        || (isManager() && newTicketCommon(ticketId, request.resource.data) && counterOk(ticketId, request.resource.data)
+          && request.resource.data.source == 'in-app-order' && request.resource.data.status == 'new'
+          && request.resource.data.managerUid == uid() && request.resource.data.manager == userDoc().displayName
+          && request.resource.data.rawMessage == '' && request.resource.data.reviewLines.size() == 0
+          && (request.resource.data.site == '' || request.resource.data.site in userDoc().sites)
+          && confirmed(request.resource.data))
+        // 4. Admin imports a ticket from a local-prototype backup (deterministic id prevents duplicates).
+        || (isAdmin() && newTicketCommon(ticketId, request.resource.data)
+          && ticketId.matches('^LEGACY-[A-Za-z0-9_-]{1,60}$') && request.resource.data.source == 'legacy-import'
+          && request.resource.data.status in ['review', 'collected', 'cancelled']);
+
+      allow update: if isStaff()
+        && resource.data.status in ['review', 'new', 'preparing', 'ready']
+        && ticketShape(request.resource.data) && stamped(request.resource.data) && auditBound(request.resource.data)
+        && !affected().hasAny(['ticketId', 'seq', 'day', 'source', 'rawMessage', 'pasteKey', 'createdAt', 'createdBy', 'legacyTicketId', 'legacyCreatedAt'])
+        && (
+          // Review / edit: same ticket, corrected details. review -> new on confirmation.
+          (affected().hasOnly(['manager', 'managerUid', 'phone', 'site', 'notes', 'items', 'reviewLines', 'reviewedAt', 'reviewedBy', 'status', 'updatedAt', 'updatedBy', 'lastAuditId'])
+            && request.resource.data.reviewedAt == request.time && request.resource.data.reviewedBy == uid()
+            && request.resource.data.reviewLines.size() == 0 && confirmed(request.resource.data)
+            && (request.resource.data.status == resource.data.status
+                || (resource.data.status == 'review' && request.resource.data.status == 'new')))
+          // Preparation progress (never from review).
+          || (affected().hasOnly(['status', 'updatedAt', 'updatedBy', 'lastAuditId']) && confirmed(resource.data)
+            && ((resource.data.status == 'new' && request.resource.data.status in ['preparing', 'ready'])
+                || (resource.data.status == 'preparing' && request.resource.data.status == 'ready')))
+          // Collection: ready -> collected, bound to the one-time stock movement.
+          || (affected().hasOnly(['status', 'updatedAt', 'updatedBy', 'lastAuditId', 'collectedAt', 'collectedBy', 'collectionMovementId'])
+            && resource.data.status == 'ready' && request.resource.data.status == 'collected' && confirmed(resource.data)
+            && request.resource.data.collectedAt == request.time && request.resource.data.collectedBy == uid()
+            && request.resource.data.collectionMovementId == ticketId + '_collect'
+            && !exists(mvPath(ticketId + '_collect'))
+            && getAfter(mvPath(ticketId + '_collect')).data.removed == resource.data.items)
+          // Cancellation of an active ticket: no stock change.
+          || (affected().hasOnly(['status', 'updatedAt', 'updatedBy', 'lastAuditId', 'cancelledAt', 'cancelledBy', 'cancelReason'])
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.cancelledAt == request.time && request.resource.data.cancelledBy == uid()
+            && text(request.resource.data.cancelReason, 300))
+        );
+      allow delete: if false;
+    }
+
+    // =====================================================================
+    // auditLogs/{id}: append-only event log. Each entry must belong to the ticket/user written with it.
+    // =====================================================================
+    match /auditLogs/{auditId} {
+      allow read: if isStaff();
+      allow create: if isActiveUser() && docId(auditId)
+        && request.resource.data.keys().hasOnly(['type', 'targetType', 'targetId', 'actorUid', 'at', 'summary', 'details'])
+        && request.resource.data.actorUid == uid() && request.resource.data.at == request.time
+        && text(request.resource.data.type, 60) && text(request.resource.data.summary, 300)
+        && request.resource.data.details is map && request.resource.data.details.size() <= 20
+        && request.resource.data.targetType in ['ticket', 'user']
+        && request.resource.data.targetId is string
+        && ((request.resource.data.targetType == 'ticket'
+              && getAfter(/databases/$(database)/documents/tickets/$(request.resource.data.targetId)).data.lastAuditId == auditId)
+            || (request.resource.data.targetType == 'user'
+              && getAfter(/databases/$(database)/documents/users/$(request.resource.data.targetId)).data.lastAuditId == auditId));
+      allow update, delete: if false;
+    }
+  }
+}
