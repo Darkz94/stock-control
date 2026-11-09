@@ -227,14 +227,24 @@ test("admin import of a prototype backup: reviewed, no duplicates on re-import",
   assert.equal(await countDocs(env, "tickets"), 2);
 });
 
-test("a ticket with every catalogue product can be confirmed and collected (rules stay within limits)", async () => {
-  const ctrl = await device("ctrl");
-  for (const p of D.PRODUCTS) await ctrl.adjustStock({ productId: p.id, mode: "count", amount: 50, reason: "Stocktake" });
-  const lines = D.PRODUCTS.map((p, i) => ({ productId: p.id, quantity: i + 1 }));
-  const { ticketId } = await ctrl.createTicket({ manager: "Thabo", phone: "", site: "", rawMessage: "", notes: "", lines });
-  await ctrl.reviewTicket(ticketId, { manager: "Thabo", phone: "", site: "", notes: "big order", lines });
-  await ctrl.changeStatus(ticketId, "ready");
-  await ctrl.changeStatus(ticketId, "collected");
-  const bal = (await readDoc(env, "inventory/balances")).onHand;
-  D.PRODUCTS.forEach((p, i) => assert.equal(bal[p.id], 50 - (i + 1), p.id));
-});
+for (const size of [8, 12, 16]) {
+  test(`a ticket with ${size} products can be confirmed and collected (rules stay within limits)`, async () => {
+    const ctrl = await device("ctrl");
+    const prods = D.PRODUCTS.slice(0, size);
+    const step = async (name, fn) => {
+      try {
+        return await fn();
+      } catch (e) {
+        throw new Error(`${size} lines — step "${name}" failed: ${e.message}`);
+      }
+    };
+    for (const p of prods) await step("stock count " + p.id, () => ctrl.adjustStock({ productId: p.id, mode: "count", amount: 50, reason: "Stocktake" }));
+    const lines = prods.map((p, i) => ({ productId: p.id, quantity: i + 1 }));
+    const { ticketId } = await step("create", () => ctrl.createTicket({ manager: "Thabo", phone: "", site: "", rawMessage: "", notes: "", lines }));
+    await step("review", () => ctrl.reviewTicket(ticketId, { manager: "Thabo", phone: "", site: "", notes: "big order", lines }));
+    await step("ready", () => ctrl.changeStatus(ticketId, "ready"));
+    await step("collect", () => ctrl.changeStatus(ticketId, "collected"));
+    const bal = (await readDoc(env, "inventory/balances")).onHand;
+    prods.forEach((p, i) => assert.equal(bal[p.id], 50 - (i + 1), p.id));
+  });
+}
