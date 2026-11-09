@@ -44,8 +44,6 @@ Rules decide who can see and change data. Indexes let the app list tickets. Depl
    | `active` | boolean | `true` |
    | `displayName` | string | your name |
    | `email` | string | your email |
-   | `phone` | string | *(leave empty)* |
-   | `sites` | array | *(empty)* |
    | `updatedAt` | timestamp | now |
    | `updatedBy` | string | `console` |
    | `lastAuditId` | string | `bootstrap` |
@@ -59,15 +57,15 @@ Rules decide who can see and change data. Indexes let the app list tickets. Depl
 3. Sign in as the admin → **Settings & team → Run first-time setup**. This creates the stock record (all zero), the shared settings, the pack conversions and the product list. It never overwrites existing data.
 4. Optional: **Review a prototype backup** to bring across tickets and stock counts from the old single-device version. You see a preview before anything is written.
 
-## G. Add staff and managers
+## G. Add staff (admins and stock controllers only)
 
 For each person:
 
 1. **Authentication → Users → Add user** (their email + a temporary password) → copy their **UID**.
 2. In the app: **Settings & team → Staff & roles → Add person** → paste the UID, enter the name, and choose a role:
    * **Stock controller**: pastes WhatsApp orders, processes tickets, receives and adjusts stock.
-   * **Site manager**: sees only their own tickets and can place in-app orders for their assigned sites. They cannot see or change stock.
    * **Admin**: everything, plus staff and settings.
+   Site managers do **not** get accounts. They keep sending requests on normal WhatsApp.
 3. Tell them to sign in and use **Forgot password** to set their own password.
 
 To remove someone: set **Access → Disabled** in the app (they lose access immediately), then optionally disable the login in the Firebase console.

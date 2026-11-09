@@ -64,7 +64,7 @@
   const MAX_LINE_QTY = 9999;
   const MAX_STOCK_QTY = 1000000;
   const MAX_MESSAGE = 6000;
-  const SOURCES = { paste: "manual-whatsapp-paste", manual: "manual-entry", inApp: "in-app-order", legacy: "legacy-import" };
+  const SOURCES = { paste: "manual-whatsapp-paste", manual: "manual-entry", legacy: "legacy-import" };
 
   const MOVEMENT_LABELS = {
     receive: "Received",

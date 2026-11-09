@@ -26,8 +26,6 @@ service cloud.firestore {
     function hasRole(roles) { return signedIn() && userDoc().active == true && userDoc().role in roles; }
     function isAdmin() { return hasRole(['admin']); }
     function isStaff() { return hasRole(['admin', 'stock-controller']); }
-    function isManager() { return hasRole(['site-manager']); }
-    function isActiveUser() { return hasRole(['admin', 'stock-controller', 'site-manager']); }
 
     // ---------- generic validators ----------
     function text(v, max) { return v is string && v.size() <= max; }
@@ -64,12 +62,11 @@ service cloud.firestore {
     // =====================================================================
     match /users/{userId} {
       function validUser(d) {
-        return d.keys().hasOnly(['role', 'active', 'displayName', 'email', 'phone', 'sites', 'updatedAt', 'updatedBy', 'lastAuditId'])
-          && d.role in ['admin', 'stock-controller', 'site-manager']
+        return d.keys().hasOnly(['role', 'active', 'displayName', 'email', 'updatedAt', 'updatedBy', 'lastAuditId'])
+          && d.role in ['admin', 'stock-controller']
           && d.active is bool
           && text(d.displayName, 100) && d.displayName.size() >= 1
-          && optText(d.email, 200) && optText(d.phone, 30)
-          && d.sites is list && d.sites.size() <= 30
+          && optText(d.email, 200)
           && d.updatedAt == request.time && d.updatedBy == uid();
       }
       allow read: if signedIn() && (userId == uid() || isStaff());
@@ -83,7 +80,7 @@ service cloud.firestore {
     // products/{productId}: catalogue reference data (the app ships the approved catalogue + images).
     // =====================================================================
     match /products/{productId} {
-      allow read: if isActiveUser();
+      allow read: if isStaff();
       allow create, update: if isAdmin() && productKey(productId)
         && request.resource.data.keys().hasOnly(['name', 'size', 'group', 'unit', 'img', 'active', 'sortOrder', 'updatedAt'])
         && text(request.resource.data.name, 80) && text(request.resource.data.size, 80)
@@ -98,7 +95,7 @@ service cloud.firestore {
     // Non-secret configuration only.
     // =====================================================================
     match /settings/{settingId} {
-      allow read: if isActiveUser();
+      allow read: if isStaff();
       allow create, update: if isAdmin() && (
         (settingId == 'app'
           && request.resource.data.keys().hasOnly(['company', 'lowThreshold', 'updatedAt', 'updatedBy'])
@@ -211,12 +208,12 @@ service cloud.firestore {
     // =====================================================================
     match /counters/{counterId} {
       function dayOf(id) { return id.split('-')[1]; }
-      allow read: if isActiveUser();
-      allow create: if (isStaff() || isManager()) && counterId.matches('^tickets-[0-9]{8}$')
+      allow read: if isStaff();
+      allow create: if isStaff() && counterId.matches('^tickets-[0-9]{8}$')
         && request.resource.data.keys().hasOnly(['next', 'updatedAt'])
         && request.resource.data.next == 1 && request.resource.data.updatedAt == request.time
         && existsAfter(ticketPath('SC-' + dayOf(counterId) + '-0001'));
-      allow update: if (isStaff() || isManager()) && counterId.matches('^tickets-[0-9]{8}$')
+      allow update: if isStaff() && counterId.matches('^tickets-[0-9]{8}$')
         && request.resource.data.keys().hasOnly(['next', 'updatedAt'])
         && request.resource.data.next == resource.data.next + 1 && request.resource.data.updatedAt == request.time
         && existsAfter(ticketPath('SC-' + dayOf(counterId) + '-' + pad4(request.resource.data.next)));
@@ -241,13 +238,13 @@ service cloud.firestore {
     // tickets/{ticketId}
     // =====================================================================
     function ticketShape(d) {
-      return d.keys().hasOnly(['ticketId', 'seq', 'day', 'status', 'source', 'manager', 'managerUid', 'phone', 'site',
+      return d.keys().hasOnly(['ticketId', 'seq', 'day', 'status', 'source', 'manager', 'phone', 'site',
           'notes', 'rawMessage', 'items', 'reviewLines', 'pasteKey', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy',
           'reviewedAt', 'reviewedBy', 'collectedAt', 'collectedBy', 'collectionMovementId', 'cancelledAt', 'cancelledBy',
           'cancelReason', 'lastAuditId', 'legacyTicketId', 'legacyCreatedAt'])
         && d.status in ['review', 'new', 'preparing', 'ready', 'collected', 'cancelled']
-        && d.source in ['manual-whatsapp-paste', 'manual-entry', 'in-app-order', 'legacy-import']
-        && text(d.manager, 100) && optText(d.managerUid, 128) && text(d.phone, 30) && text(d.site, 120)
+        && d.source in ['manual-whatsapp-paste', 'manual-entry', 'legacy-import']
+        && text(d.manager, 100) && text(d.phone, 30) && text(d.site, 120)
         && text(d.notes, 1500) && text(d.rawMessage, 6000)
         && d.items is map
         && d.reviewLines is list && d.reviewLines.size() <= 80;
@@ -272,12 +269,7 @@ service cloud.firestore {
         (d.source == 'manual-whatsapp-paste' && d.status == 'review' && d.rawMessage.size() >= 1 && isStaff() && counterOk(id, d))
         // 2. Stock controller enters a complete ticket manually.
         || (d.source == 'manual-entry' && d.status == 'new' && confirmed(d) && isStaff() && counterOk(id, d))
-        // 3. Phase 2: signed-in site manager submits the in-app order form for themself.
-        || (d.source == 'in-app-order' && d.status == 'new' && confirmed(d) && isManager()
-          && d.managerUid == uid() && d.manager == userDoc().displayName
-          && d.rawMessage == '' && d.reviewLines.size() == 0
-          && (d.site == '' || d.site in userDoc().sites) && counterOk(id, d))
-        // 4. Admin imports a ticket from a local-prototype backup (deterministic id prevents duplicates).
+        // 3. Admin imports a ticket from a local-prototype backup (deterministic id prevents duplicates).
         || (d.source == 'legacy-import' && id.matches('^LEGACY-[A-Za-z0-9_-]{1,60}$')
           && d.status in ['review', 'collected', 'cancelled'] && isAdmin())
       );
@@ -293,7 +285,7 @@ service cloud.firestore {
         && (!a.hasAny(['items']) || qtyMap(n.items, 9999))
         && (
           // Review / edit: same ticket, corrected details. review -> new on confirmation.
-          (a.hasOnly(['manager', 'managerUid', 'phone', 'site', 'notes', 'items', 'reviewLines', 'reviewedAt', 'reviewedBy', 'status', 'updatedAt', 'updatedBy', 'lastAuditId'])
+          (a.hasOnly(['manager', 'phone', 'site', 'notes', 'items', 'reviewLines', 'reviewedAt', 'reviewedBy', 'status', 'updatedAt', 'updatedBy', 'lastAuditId'])
             && n.reviewedAt == request.time && n.reviewedBy == uid()
             && n.reviewLines.size() == 0 && confirmed(n)
             && (n.status == o.status || (o.status == 'review' && n.status == 'new')))
@@ -317,9 +309,8 @@ service cloud.firestore {
     }
 
     match /tickets/{ticketId} {
-      allow get: if isStaff() || (isManager() && resource.data.managerUid == uid());
-      // Managers may only list their own tickets (the query must filter on managerUid == their uid).
-      allow list: if isStaff() || (isManager() && resource.data.managerUid == uid());
+      // Only admins and stock controllers use the app; site managers order through normal WhatsApp.
+      allow read: if isStaff();
 
       allow create: if ticketCreateOk(ticketId, request.resource.data);
       allow update: if isStaff() && ticketUpdateOk(ticketId);
@@ -331,7 +322,7 @@ service cloud.firestore {
     // =====================================================================
     match /auditLogs/{auditId} {
       allow read: if isStaff();
-      allow create: if isActiveUser() && docId(auditId)
+      allow create: if isStaff() && docId(auditId)
         && request.resource.data.keys().hasOnly(['type', 'targetType', 'targetId', 'actorUid', 'at', 'summary', 'details'])
         && request.resource.data.actorUid == uid() && request.resource.data.at == request.time
         && text(request.resource.data.type, 60) && text(request.resource.data.summary, 300)

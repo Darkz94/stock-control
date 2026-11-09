@@ -19,15 +19,9 @@ Regular WhatsApp does **not** expose a supported public interface for third-part
 
 The `https://wa.me/<international-number>?text=<encoded-message>` URL opens the WhatsApp conversation with a prewritten message. The app cannot know whether the operator tapped Send.
 
-## Alternative if the operator wants orders to appear without copying WhatsApp
+## Site managers do not use the app
 
-With Firebase connected (`backend: "firebase"`), site managers get an **authenticated in-app order form** (implemented on the `firebase-backend` branch):
-1. Manager signs in, chooses products, sizes and quantities, and submits.
-2. Firestore securely creates a new ticket, visible immediately to authorised stock controllers.
-3. Manager and controller may still chat via normal WhatsApp separately.
-4. The controller may send a manual WhatsApp collection-ready message.
-
-This provides fully automatic ticket creation on form submission **without requiring WhatsApp Business**, but it is **not automatic capture of a WhatsApp chat**.
+By the owner's decision, site managers do **not** get app accounts. They send stock requests only through normal WhatsApp, and the stock controller pastes each one into the app. Only admins and stock controllers can sign in (enforced by the Firestore security rules).
 
 ## Security and safety
 

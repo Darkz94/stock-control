@@ -12,7 +12,7 @@ npm run test:rules    # starts the Firestore emulator, runs security-rule + back
 
 `npm run test:rules` covers:
 
-* Security rules (`tests/rules.test.mjs`): signed-out and unknown users are denied; disabled staff are denied; nobody can give themselves a role; admins cannot lock themselves out; managers cannot read or change stock or see other managers' tickets; stock cannot change without a matching movement, go below zero, be replayed or backdated; conversions must use the configured ratio; collection is refused if any part is missing or altered, and works only once; review tickets cannot be prepared or collected; the original message can never be edited; audit entries are append-only.
+* Security rules (`tests/rules.test.mjs`): signed-out and unknown users are denied; disabled staff are denied; nobody can give themselves a role; admins cannot lock themselves out; any login without an admin or stock-controller role (e.g. a site manager) can read and write nothing; admins cannot grant other roles; stock cannot change without a matching movement, go below zero, be replayed or backdated; conversions must use the configured ratio; collection is refused if any part is missing or altered, and works only once; review tickets cannot be prepared or collected; the original message can never be edited; audit entries are append-only.
 * Backend (`tests/backend.test.mjs`): uses the real `backend-firebase.mjs` with several simulated devices at once. Paste creates a persisted `review` ticket with the raw text; a repeated paste, even from another device, does not duplicate; concurrent pastes get unique sequential numbers; review → confirm → collect deducts stock exactly once; two devices collecting the same ticket at the same moment result in one issue; two tickets competing for the last stock never go negative; concurrent receipts lose no history; offline pastes are queued, not reported as tickets; the prototype import never duplicates.
 
 GitHub Actions runs both on every push to this branch (`.github/workflows/tests.yml`).
@@ -29,7 +29,7 @@ npx firebase emulators:start --project demo-stock-control
 1. In the Emulator UI → **Authentication → Add user** (e.g. `admin@example.test` / `password1`). Copy the UID.
 2. Emulator UI → **Firestore → Start collection** `users` → document = UID → fields as in [FIREBASE_SETUP.md](FIREBASE_SETUP.md) step E (`role` = `admin`).
 3. Open `http://localhost:5000/?emulator=1`, sign in, then go to **Settings & team → Run first-time setup**.
-4. Add a stock controller and a site manager the same way (Auth user, then **Staff & roles** in the app). Give the manager a site, e.g. `Complex A`.
+4. Add a stock controller the same way (Auth user, then **Staff & roles** in the app).
 5. Check by hand, ideally in two browser windows signed in as different people:
    - [ ] Paste `2 x Pine Gel 5L` / `4 x Two-Stroke Oil 500ml` / `3 x Black Bags` → a ticket appears in **Needs review** immediately, and in the other window too.
    - [ ] Paste the same text again → the existing ticket opens; no second ticket.
@@ -38,7 +38,7 @@ npx firebase emulators:start --project demo-stock-control
    - [ ] Receive stock, then collect a ticket → stock goes down once; history shows *Order collected*.
    - [ ] Try to collect the same ticket from the second window → it is refused.
    - [ ] WhatsApp buttons only open a `wa.me` draft. Nothing is sent, and the ticket is not marked "sent".
-   - [ ] Sign in as the manager → only their own tickets; no Inventory/Settings; **New order** creates a ticket that the controller sees instantly.
+   - [ ] A login with no staff profile sees only "Waiting for access" and no data.
    - [ ] Turn the network off (DevTools → Network → Offline) → banner says offline; stock buttons are disabled; a paste shows under **Waiting to sync**. Turn it back on and it becomes a ticket.
 
 ## 3. Staging project (real Firebase, test data only)

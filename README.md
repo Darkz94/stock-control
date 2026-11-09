@@ -45,11 +45,10 @@ Review the detected products and quantities carefully; the parser is not AI and 
 
 **`backend: "firebase"`** (branch `firebase-backend`) turns it into a shared team app:
 
-- Email/password sign-in with server-verified roles: **admin**, **stock controller**, **site manager**.
+- Email/password sign-in for **admins** and **stock controllers** only, with roles verified by the server. Site managers have no accounts; they keep sending requests by normal WhatsApp.
 - Tickets, stock and history are shared live across every signed-in device, with Firestore transactions for each change. The app only shows a change as saved once the server confirms it.
 - `firestore.rules` enforce the stock rules on the server: no negative stock, every balance change is backed by an immutable movement, a ticket is issued exactly once, review tickets cannot be collected, the original WhatsApp text cannot be altered, and every ticket and staff change is audited.
 - Pasting offline keeps the order on the device in a clearly marked *Waiting to sync* list until the connection returns. Stock changes are blocked offline.
-- Site managers can place orders in the app (Phase 2). Normal WhatsApp stays human-to-human.
 - An admin can import a prototype JSON backup, with a preview first and no duplicates on re-import.
 
 Read in this order: [Design notes](docs/FIREBASE_DESIGN.md) → [Owner setup checklist](docs/FIREBASE_SETUP.md) → [Testing before deployment](docs/FIREBASE_TESTING.md). Nothing is deployed, billed or sent without the owner's approval.

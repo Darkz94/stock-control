@@ -163,19 +163,17 @@ test("write-off, exact count and conversion keep balances consistent", async () 
   assert.equal(bal["pine-gel-5l"], 14);
 });
 
-test("managers cannot process tickets or stock; in-app order creates a ticket automatically", async () => {
-  const mgr = await device("mgr");
-  await assert.rejects(mgr.adjustStock({ productId: "mop", mode: "in", amount: 1, reason: "x" }), /Only stock controllers/);
-  const { ticketId } = await mgr.createInAppOrder({ site: "Complex A", notes: "", lines: [{ productId: "mop", quantity: 1 }] });
-  const t = await readDoc(env, "tickets/" + ticketId);
-  assert.equal(t.status, "new");
-  assert.equal(t.source, "in-app-order");
-  assert.equal(t.managerUid, "mgr");
-  await waitFor(mgr, (s) => s.tickets.some((x) => x.id === ticketId));
-  assert.ok(mgr._state().tickets.every((x) => x.managerUid === "mgr"), "manager only receives their own tickets");
-  assert.equal(mgr._state().movements.length, 0);
-  const ctrl = await device("ctrl");
-  await waitFor(ctrl, (s) => s.tickets.some((x) => x.id === ticketId));
+test("a non-staff profile (e.g. site manager) is shown 'no access' and loads no data", async () => {
+  const db = env.authenticatedContext("mgr").firestore();
+  const sdk = { ...fs, onAuthStateChanged: (_a, cb) => (setTimeout(() => cb({ uid: "mgr", email: "" }), 0), () => {}), signOut: async () => {} };
+  const b = createFirebaseBackend({ sdk, domain: D, auth: {}, db, storage: memoryStorage() });
+  open.push(b);
+  await b.init();
+  const s = await waitFor(b, (st) => st.authState !== "loading");
+  assert.equal(s.authState, "inactive");
+  assert.equal(s.tickets.length, 0);
+  await assert.rejects(b.capturePaste({ message: "2 x mop" }), /approved account/);
+  assert.equal(b.createInAppOrder, undefined, "the in-app order form has been removed");
 });
 
 test("offline paste is queued on the device (not reported as a ticket) and submitted on reconnect", async () => {

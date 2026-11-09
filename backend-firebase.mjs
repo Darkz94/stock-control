@@ -80,7 +80,6 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
     return {
       id: d.ticketId || snapDoc.id,
       manager: d.manager || D.MANAGER_PLACEHOLDER,
-      managerUid: d.managerUid || null,
       phone: d.phone || "",
       site: d.site || "",
       notes: d.notes || "",
@@ -137,7 +136,7 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
       s.settingsExists = d.exists();
       if (d.exists()) s.settings = { company: d.data().company || "Stock Control", lowThreshold: Number(d.data().lowThreshold ?? 2) };
     });
-    if (staff) {
+    if (staff) { // only admins and stock controllers have accounts
       listen("balances", doc(db, "inventory", "balances"), (d) => {
         s.balancesExists = d.exists();
         const onHand = d.exists() ? d.data().onHand || {} : {};
@@ -161,10 +160,6 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
       listen("users", collection(db, "users"), (q) => {
         s.users = q.docs.map((x) => ({ uid: x.id, ...x.data() })).sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
       });
-    } else {
-      listen("tickets-mine", query(collection(db, "tickets"), where("managerUid", "==", s.authUser.uid), orderBy("createdAt", "desc"), limit(100)), (q) => {
-        ticketsRecent = new Map(q.docs.map((x) => [x.id, normaliseTicket(x)]));
-      });
     }
   }
 
@@ -181,7 +176,8 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
         } else {
           const u = { uid: authUser.uid, email: authUser.email || "", ...d.data() };
           s.user = u;
-          s.authState = u.active === true ? "ready" : "inactive";
+          // Only admins and stock controllers may use the app; any other profile has no access.
+          s.authState = u.active === true && ["admin", "stock-controller"].includes(u.role) ? "ready" : "inactive";
           if (s.authState !== "ready") stopData();
           else if (before !== u.role + "|" + u.active) startData(u.role);
         }
@@ -288,7 +284,7 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
     return {
       ticketId: r.ticketId, seq: r.seq, day: r.day,
       status: fields.status, source: fields.source,
-      manager: fields.manager, managerUid: fields.managerUid ?? null,
+      manager: fields.manager,
       phone: fields.phone || "", site: fields.site || "", notes: fields.notes || "", rawMessage: fields.rawMessage || "",
       items: D.linesToItems(fields.lines), reviewLines: fields.reviewLines || [], pasteKey: fields.pasteKey ?? null,
       createdAt: serverTimestamp(), createdBy: s.user.uid, updatedAt: serverTimestamp(), updatedBy: s.user.uid,
@@ -491,28 +487,17 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
       writePending(s.pending.filter((p) => p.requestId !== requestId));
     },
 
-    async createTicket({ manager, phone, site, rawMessage, notes, lines, managerUid = null }) {
+    async createTicket({ manager, phone, site, rawMessage, notes, lines }) {
       me();
       requireStaff();
       manager = String(manager || "").trim();
       const combined = D.combineLines(lines);
       if (!D.isConfirmedManager(manager) || !combined.ok) throw new UserError("Enter a manager and one or more valid product quantities.");
       if (phone && !D.whatsappPhone(phone)) throw new UserError("Use a valid WhatsApp number, or leave the field empty.");
-      return writeNewTicket({ status: "new", source: D.SOURCES.manual, manager, managerUid, phone, site, rawMessage, notes, lines: combined.lines });
+      return writeNewTicket({ status: "new", source: D.SOURCES.manual, manager, phone, site, rawMessage, notes, lines: combined.lines });
     },
 
-    /** Phase 2: a signed-in site manager orders directly in the app (no WhatsApp involved). */
-    async createInAppOrder({ site, notes, lines }) {
-      const u = me();
-      if (u.role !== "site-manager") throw new UserError("Only site managers use the in-app order form.");
-      const combined = D.combineLines(lines);
-      if (!combined.ok) throw new UserError(combined.error);
-      site = String(site || "");
-      if (site && !(u.sites || []).includes(site)) throw new UserError("Choose one of your assigned sites.");
-      return writeNewTicket({ status: "new", source: D.SOURCES.inApp, manager: u.displayName, managerUid: u.uid, phone: u.phone || "", site, notes, lines: combined.lines });
-    },
-
-    async reviewTicket(id, { manager, phone, site, notes, lines, managerUid }) {
+    async reviewTicket(id, { manager, phone, site, notes, lines }) {
       me();
       requireStaff();
       manager = String(manager || "").trim();
@@ -525,7 +510,6 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
           if (D.FINAL_STATUSES.includes(cur.status)) throw new UserError("Ticket cannot be edited.");
           const status = cur.status === "review" ? "new" : cur.status;
           const update = { manager, phone: phone || "", site: site || "", notes: notes || "", items: D.linesToItems(combined.lines), reviewLines: [], reviewedAt: serverTimestamp(), reviewedBy: s.user.uid, status };
-          if (managerUid !== undefined) update.managerUid = managerUid || null;
           return { update, type: cur.status === "review" ? "ticket.confirmed" : "ticket.edited", summary: cur.status === "review" ? "Reviewed and confirmed" : "Ticket details edited", details: { from: cur.status, to: status } };
         },
       });
@@ -617,25 +601,23 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
       });
     },
 
-    /** Admin: create or update a staff/manager profile for an existing Firebase Auth user. */
-    async saveUser(targetUid, { role, active, displayName, email = "", phone = "", sites = [] }) {
+    /** Admin: create or update a staff profile for an existing Firebase Auth user. */
+    async saveUser(targetUid, { role, active, displayName, email = "" }) {
       me();
       requireAdmin();
       targetUid = String(targetUid || "").trim();
       if (!/^[A-Za-z0-9]{10,128}$/.test(targetUid)) throw new UserError("Paste the user's UID from Firebase Authentication.");
-      if (!["admin", "stock-controller", "site-manager"].includes(role)) throw new UserError("Choose a role.");
+      if (!["admin", "stock-controller"].includes(role)) throw new UserError("Choose a role.");
       displayName = String(displayName || "").trim().slice(0, 100);
       if (!displayName) throw new UserError("Enter the person's name.");
-      if (phone && !D.whatsappPhone(phone)) throw new UserError("Correct the WhatsApp number or leave it blank.");
       if (targetUid === s.user.uid && (role !== "admin" || active !== true)) throw new UserError("You cannot remove your own admin access.");
-      const cleanSites = [...new Set((sites || []).map((x) => String(x).trim().slice(0, 120)).filter(Boolean))].slice(0, 30);
       return tx(async (t) => {
         const ref = doc(db, "users", targetUid);
         const before = await t.get(ref);
         const auditId = audit(t, before.exists() ? "user.updated" : "user.created", "user", targetUid, `${displayName}: ${role}${active ? "" : " (inactive)"}`, {
           role, active: !!active, previousRole: before.exists() ? before.data().role : null, previousActive: before.exists() ? before.data().active : null,
         });
-        t.set(ref, { role, active: !!active, displayName, email: String(email || "").slice(0, 200), phone: String(phone || "").slice(0, 30), sites: cleanSites, updatedAt: serverTimestamp(), updatedBy: s.user.uid, lastAuditId: auditId });
+        t.set(ref, { role, active: !!active, displayName, email: String(email || "").slice(0, 200), updatedAt: serverTimestamp(), updatedBy: s.user.uid, lastAuditId: auditId });
       });
     },
 
@@ -673,7 +655,7 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
               const note = item.status === "review" ? [`Imported from the local prototype (was ${D.STATUSES[item.originalStatus] || item.originalStatus}). Confirm before preparing.`] : [];
               t.set(ref, {
                 ticketId: item.newId, seq: 0, day: "", status: item.status, source: D.SOURCES.legacy,
-                manager: String(raw.manager || D.MANAGER_PLACEHOLDER).slice(0, 100), managerUid: null,
+                manager: String(raw.manager || D.MANAGER_PLACEHOLDER).slice(0, 100),
                 phone: String(raw.phone || "").slice(0, 30), site: String(raw.site || "").slice(0, 120), notes: String(raw.notes || "").slice(0, 1500),
                 rawMessage: String(raw.rawMessage || "").slice(0, 6000), items: D.linesToItems(item.lines),
                 reviewLines: [...note, ...(Array.isArray(raw.reviewLines) ? raw.reviewLines.map(String).slice(0, 60) : [])],

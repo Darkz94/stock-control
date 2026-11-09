@@ -3,7 +3,7 @@
 import test, { before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, collection, query, where, orderBy, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, collection, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { makeEnv, seed, seedTicket, readDoc } from "./emulator-helpers.mjs";
 
 let env;
@@ -42,35 +42,43 @@ test("disabled staff lose all access", async () => {
 
 test("nobody can grant themselves a role; only admins manage users", async () => {
   const db = as("ctrl");
-  await assertFails(setDoc(doc(db, "users", "ctrl"), { role: "admin", active: true, displayName: "Cara", email: "", phone: "", sites: [], updatedAt: serverTimestamp(), updatedBy: "ctrl", lastAuditId: "aaaaaaaa1" }));
-  await assertFails(setDoc(doc(as("stranger"), "users", "stranger"), { role: "admin", active: true, displayName: "X", email: "", phone: "", sites: [], updatedAt: serverTimestamp(), updatedBy: "stranger", lastAuditId: "aaaaaaaa2" }));
+  await assertFails(setDoc(doc(db, "users", "ctrl"), { role: "admin", active: true, displayName: "Cara", email: "", updatedAt: serverTimestamp(), updatedBy: "ctrl", lastAuditId: "aaaaaaaa1" }));
+  await assertFails(setDoc(doc(as("stranger"), "users", "stranger"), { role: "admin", active: true, displayName: "X", email: "", updatedAt: serverTimestamp(), updatedBy: "stranger", lastAuditId: "aaaaaaaa2" }));
   // Admin can add a person, with an audit entry in the same write.
   const adb = as("admin");
   const b = writeBatch(adb);
-  b.set(doc(adb, "users", "newperson123"), { role: "stock-controller", active: true, displayName: "New Person", email: "", phone: "", sites: [], updatedAt: serverTimestamp(), updatedBy: "admin", lastAuditId: "audit-user-1" });
+  b.set(doc(adb, "users", "newperson123"), { role: "stock-controller", active: true, displayName: "New Person", email: "", updatedAt: serverTimestamp(), updatedBy: "admin", lastAuditId: "audit-user-1" });
   b.set(...auditDoc(adb, "audit-user-1", "admin", "user", "newperson123"));
   await assertSucceeds(b.commit());
   // Without the audit entry the same change is refused.
-  await assertFails(setDoc(doc(adb, "users", "newperson456"), { role: "stock-controller", active: true, displayName: "No Audit", email: "", phone: "", sites: [], updatedAt: serverTimestamp(), updatedBy: "admin", lastAuditId: "audit-user-missing" }));
+  await assertFails(setDoc(doc(adb, "users", "newperson456"), { role: "stock-controller", active: true, displayName: "No Audit", email: "", updatedAt: serverTimestamp(), updatedBy: "admin", lastAuditId: "audit-user-missing" }));
 });
 
 test("an admin cannot demote or disable themselves (no lock-out)", async () => {
   const adb = as("admin");
   const b = writeBatch(adb);
-  b.set(doc(adb, "users", "admin"), { role: "stock-controller", active: true, displayName: "Ada", email: "", phone: "", sites: [], updatedAt: serverTimestamp(), updatedBy: "admin", lastAuditId: "audit-self-1" });
+  b.set(doc(adb, "users", "admin"), { role: "stock-controller", active: true, displayName: "Ada", email: "", updatedAt: serverTimestamp(), updatedBy: "admin", lastAuditId: "audit-self-1" });
   b.set(...auditDoc(adb, "audit-self-1", "admin", "user", "admin"));
   await assertFails(b.commit());
 });
 
-test("staff can read user profiles; managers can read only their own", async () => {
+test("staff can read user profiles; other accounts only their own", async () => {
   await assertSucceeds(getDocs(collection(as("ctrl"), "users")));
   await assertSucceeds(getDoc(doc(as("mgr"), "users", "mgr")));
-  await assertFails(getDoc(doc(as("mgr"), "users", "mgr2")));
+  await assertFails(getDoc(doc(as("mgr"), "users", "ctrl")));
   await assertFails(getDocs(collection(as("mgr"), "users")));
 });
 
+test("admins can only grant admin or stock-controller roles", async () => {
+  const adb = as("admin");
+  const b = writeBatch(adb);
+  b.set(doc(adb, "users", "someone12345"), { role: "site-manager", active: true, displayName: "Site Person", email: "", updatedAt: serverTimestamp(), updatedBy: "admin", lastAuditId: "audit-role-1" });
+  b.set(...auditDoc(adb, "audit-role-1", "admin", "user", "someone12345"));
+  await assertFails(b.commit());
+});
+
 // ---------------------------------------------------------------- stock balances
-test("managers cannot read or edit stock balances or movements", async () => {
+test("non-staff accounts cannot read or edit stock balances or movements", async () => {
   await assertFails(getDoc(doc(as("mgr"), "inventory", "balances")));
   await assertFails(getDocs(collection(as("mgr"), "stockMovements")));
   await assertFails(updateDoc(doc(as("mgr"), "inventory", "balances"), { onHand: { mop: 999 } }));
@@ -145,7 +153,7 @@ test("collection is refused if any part is missing or altered", async () => {
   await assertFails(collectionBatch(as("ctrl"), "ctrl", id, { skip: ["audit"] }).commit()); // no audit entry
   await assertFails(collectionBatch(as("ctrl"), "ctrl", id, { removed: { mop: 1 }, onHand: { mop: 4, "pine-gel-20l": 2, "pine-gel-5l": 0 } }).commit()); // under-deduct
   await assertFails(collectionBatch(as("ctrl"), "ctrl", id, { mvId: "random-movement-id" }).commit()); // non-deterministic id
-  await assertFails(collectionBatch(as("mgr"), "mgr", id).commit()); // managers cannot issue stock
+  await assertFails(collectionBatch(as("mgr"), "mgr", id).commit()); // non-staff cannot issue stock
   assert.equal((await readDoc(env, "tickets/" + id)).status, "ready");
   assert.equal((await readDoc(env, "inventory/balances")).onHand.mop, 5);
 });
@@ -217,11 +225,11 @@ test("cancelling an active ticket does not need or allow stock changes", async (
   assert.equal((await readDoc(env, "inventory/balances")).onHand.mop, 5);
 });
 
-function newTicketBatch(db, uid, { id = "SC-20261109-0001", seq = 1, counterNext = 1, status = "review", source = "manual-whatsapp-paste", manager = "Manager not specified", managerUid = null, rawMessage = "2 x mop", items = {}, site = "", auditId = "audit-new-1", counter = true } = {}) {
+function newTicketBatch(db, uid, { id = "SC-20261109-0001", seq = 1, counterNext = 1, status = "review", source = "manual-whatsapp-paste", manager = "Manager not specified", rawMessage = "2 x mop", items = {}, site = "", auditId = "audit-new-1", counter = true } = {}) {
   const b = writeBatch(db);
   if (counter) b.set(doc(db, "counters", "tickets-20261109"), { next: counterNext, updatedAt: serverTimestamp() });
   b.set(doc(db, "tickets", id), {
-    ticketId: id, seq, day: "20261109", status, source, manager, managerUid, phone: "", site, notes: "", rawMessage, items, reviewLines: [], pasteKey: null,
+    ticketId: id, seq, day: "20261109", status, source, manager, phone: "", site, notes: "", rawMessage, items, reviewLines: [], pasteKey: null,
     createdAt: serverTimestamp(), createdBy: uid, updatedAt: serverTimestamp(), updatedBy: uid, reviewedAt: null, reviewedBy: null, collectedAt: null, collectedBy: null,
     collectionMovementId: null, cancelledAt: null, cancelledBy: null, cancelReason: null, lastAuditId: auditId,
   });
@@ -242,28 +250,23 @@ test("pasted tickets are created in review with a sequential, unique number", as
   await assertFails(newTicketBatch(db, "ctrl", { id: "SC-20261109-0003", seq: 3, counterNext: 3, rawMessage: "", auditId: "audit-new-7" }).commit());
 });
 
-// ---------------------------------------------------------------- managers (Phase 2) & privacy
-test("managers see only their own tickets and cannot change them", async () => {
-  await seedTicket(env, "SC-20261109-0060", { managerUid: "mgr", status: "new" });
-  await seedTicket(env, "SC-20261109-0061", { managerUid: "mgr2", status: "new", phone: "0820000000" });
+// ---------------------------------------------------------------- only admins + stock controllers use the app
+test("a non-staff account (e.g. a site manager) can read and create nothing", async () => {
+  await seedTicket(env, "SC-20261109-0060", { status: "new", phone: "0820000000" });
   const db = as("mgr");
-  await assertSucceeds(getDoc(doc(db, "tickets", "SC-20261109-0060")));
-  await assertFails(getDoc(doc(db, "tickets", "SC-20261109-0061")));
-  await assertSucceeds(getDocs(query(collection(db, "tickets"), where("managerUid", "==", "mgr"), orderBy("createdAt", "desc"))));
+  await assertFails(getDoc(doc(db, "tickets", "SC-20261109-0060")));
   await assertFails(getDocs(query(collection(db, "tickets"), orderBy("createdAt", "desc"))));
   await assertFails(statusBatch(db, "mgr", "SC-20261109-0060", "cancelled", "audit-m-1", { cancelledAt: serverTimestamp(), cancelledBy: "mgr", cancelReason: "" }).commit());
+  await assertFails(newTicketBatch(db, "mgr", { status: "new", source: "manual-entry", manager: "Thabo Manager", rawMessage: "", items: { mop: 1 }, auditId: "audit-m-2" }).commit());
+  await assertFails(newTicketBatch(db, "mgr", { status: "new", source: "in-app-order", manager: "Thabo Manager", rawMessage: "", items: { mop: 1 }, auditId: "audit-m-3" }).commit());
   await assertFails(getDocs(collection(db, "auditLogs")));
   await assertFails(getDocs(collection(db, "pasteLocks")));
+  await assertFails(getDoc(doc(db, "settings", "app")));
+  await assertFails(getDoc(doc(db, "counters", "tickets-20261109")));
 });
 
-test("managers can submit an in-app order only for themselves and their sites", async () => {
-  const db = as("mgr");
-  const base = { status: "new", source: "in-app-order", manager: "Thabo Manager", managerUid: "mgr", rawMessage: "", items: { mop: 1 } };
-  await assertFails(newTicketBatch(db, "mgr", { ...base, managerUid: "mgr2", auditId: "audit-io-1" }).commit());
-  await assertFails(newTicketBatch(db, "mgr", { ...base, manager: "Someone Else", auditId: "audit-io-2" }).commit());
-  await assertFails(newTicketBatch(db, "mgr", { ...base, site: "Complex B", auditId: "audit-io-3" }).commit());
-  await assertFails(newTicketBatch(db, "mgr", { ...base, status: "ready", auditId: "audit-io-4" }).commit());
-  await assertSucceeds(newTicketBatch(db, "mgr", { ...base, site: "Complex A", auditId: "audit-io-5" }).commit());
+test("the in-app order source no longer exists, even for staff", async () => {
+  await assertFails(newTicketBatch(as("ctrl"), "ctrl", { status: "new", source: "in-app-order", manager: "Thabo", rawMessage: "", items: { mop: 1 }, auditId: "audit-ia-1" }).commit());
 });
 
 test("audit logs are append-only and readable by staff only", async () => {
@@ -280,5 +283,5 @@ test("settings and products are admin-only", async () => {
   await assertFails(setDoc(doc(as("ctrl"), "settings", "app"), { company: "X", lowThreshold: 1, updatedAt: serverTimestamp(), updatedBy: "ctrl" }));
   await assertSucceeds(setDoc(doc(as("admin"), "settings", "app"), { company: "X", lowThreshold: 1, updatedAt: serverTimestamp(), updatedBy: "admin" }));
   await assertFails(setDoc(doc(as("admin"), "settings", "secrets"), { apiKey: "nope" }));
-  await assertSucceeds(getDoc(doc(as("mgr"), "settings", "app")));
+  await assertSucceeds(getDoc(doc(as("ctrl"), "settings", "app")));
 });

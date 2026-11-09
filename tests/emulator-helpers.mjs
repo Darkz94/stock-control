@@ -20,8 +20,8 @@ export const PEOPLE = {
   admin: { role: "admin", displayName: "Ada Admin" },
   ctrl: { role: "stock-controller", displayName: "Cara Controller" },
   ctrl2: { role: "stock-controller", displayName: "Colin Controller" },
-  mgr: { role: "site-manager", displayName: "Thabo Manager", sites: ["Complex A"], phone: "0821234567" },
-  mgr2: { role: "site-manager", displayName: "Lindiwe Manager", sites: ["Complex B"] },
+  // A leftover or hand-made profile with a non-staff role must get no access at all.
+  mgr: { role: "site-manager", displayName: "Thabo Manager" },
   gone: { role: "stock-controller", displayName: "Former Staff", active: false },
 };
 
@@ -39,7 +39,7 @@ export async function seed(env, { onHand = {} } = {}) {
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     for (const [uid, p] of Object.entries(PEOPLE)) {
-      await setDoc(doc(db, "users", uid), { active: true, email: "", phone: "", sites: [], ...p, updatedAt: serverTimestamp(), updatedBy: "seed", lastAuditId: "seed-audit" });
+      await setDoc(doc(db, "users", uid), { active: true, email: "", ...p, updatedAt: serverTimestamp(), updatedBy: "seed", lastAuditId: "seed-audit" });
     }
     await setDoc(doc(db, "inventory", "balances"), { onHand, version: 0, lastMovementId: null, updatedAt: serverTimestamp(), updatedBy: "seed" });
     await setDoc(doc(db, "settings", "app"), { company: "Stock Control", lowThreshold: 2, updatedAt: serverTimestamp(), updatedBy: "seed" });
@@ -55,7 +55,7 @@ export async function seed(env, { onHand = {} } = {}) {
 export async function seedTicket(env, id, fields = {}) {
   await env.withSecurityRulesDisabled(async (ctx) => {
     await setDoc(doc(ctx.firestore(), "tickets", id), {
-      ticketId: id, seq: 1, day: "20261109", status: "ready", source: "manual-entry", manager: "Thabo Manager", managerUid: null,
+      ticketId: id, seq: 1, day: "20261109", status: "ready", source: "manual-entry", manager: "Thabo Manager",
       phone: "", site: "", notes: "", rawMessage: "", items: { mop: 2 }, reviewLines: [], pasteKey: null,
       createdAt: Timestamp.now(), createdBy: "ctrl", updatedAt: Timestamp.now(), updatedBy: "ctrl",
       reviewedAt: null, reviewedBy: null, collectedAt: null, collectedBy: null, collectionMovementId: null,

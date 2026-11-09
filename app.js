@@ -57,10 +57,9 @@ const isShared = () => session.mode === "firebase";
 const role = () => session.user?.role || (isShared() ? "" : "admin");
 const isStaff = () => ["admin", "stock-controller"].includes(role());
 const isAdmin = () => role() === "admin";
-const isManager = () => role() === "site-manager";
 const signedInReady = () => !isShared() || session.authState === "ready";
 const offline = () => isShared() && session.connection === "offline";
-const ROLE_LABELS = { admin: "Admin", "stock-controller": "Stock controller", "site-manager": "Site manager" };
+const ROLE_LABELS = { admin: "Admin", "stock-controller": "Stock controller" };
 
 function notify(message, error = false) {
   const host = document.querySelector("#toast-host");
@@ -113,7 +112,6 @@ function sharedNotice() {
 }
 
 function dashboard() {
-  if (isManager()) return managerDashboard();
   const pending = data.tickets.filter((t) => ["review", "new", "preparing"].includes(t.status));
   const ready = data.tickets.filter((t) => t.status === "ready");
   const low = PRODUCTS.filter((p) => qty(p.id) <= data.settings.lowThreshold);
@@ -122,15 +120,6 @@ function dashboard() {
     `<div class="stats-grid"><div class="stat top"><div class="stat-top">Product variants <span class="stat-icon">▦</span></div><div class="stat-number">${PRODUCTS.length}</div><div class="stat-bottom">Cleaning, garden & maintenance</div></div><div class="stat"><div class="stat-top">Open requests <span class="stat-icon">☷</span></div><div class="stat-number">${pending.length}</div><div class="stat-bottom">New and being prepared</div></div><div class="stat"><div class="stat-top">Ready to collect <span class="stat-icon">✓</span></div><div class="stat-number">${ready.length}</div><div class="stat-bottom">Awaiting handover</div></div><div class="stat"><div class="stat-top">Low / zero stock <span class="stat-icon">!</span></div><div class="stat-number">${low.length}</div><div class="stat-bottom">At or below alert threshold</div></div></div>` +
     `<div class="two-columns"><section class="panel"><div class="panel-heading"><div><h2>Recent order tickets</h2><div class="panel-sub">Track requests from creation through collection</div></div><button class="heading-link btn tiny" data-view="orders">All tickets →</button></div>${data.tickets.length ? `<div class="ticket-list">${data.tickets.slice(0, 5).map(ticketRow).join("")}</div>` : `<div class="empty-state"><span class="empty-illustration">☷</span>No orders yet. Create your first manager request to open a ticket.</div>`}</section>
  <aside><section class="panel"><div class="panel-heading"><div><h2>Quick actions</h2><div class="panel-sub">Common stock operations</div></div></div><div class="quick-actions"><button class="quick-action" data-action="new-order"><span>☷</span>New ticket</button><button class="quick-action" data-action="stock-receive"><span>＋</span>Receive stock</button><button class="quick-action" data-view="transfers"><span>⇄</span>Convert packs</button><button class="quick-action" data-view="activity"><span>◷</span>Stock history</button></div></section><div style="height:17px"></div>${sharedNotice()}</aside></div>`
-  );
-}
-function managerDashboard() {
-  const open = data.tickets.filter((t) => D.ACTIVE_STATUSES.includes(t.status));
-  const ready = data.tickets.filter((t) => t.status === "ready");
-  return (
-    title("SITE MANAGER", "My stock requests", "Order supplies in the app and follow each request until collection.", btn("＋ New order", "manager-order")) +
-    `<div class="stats-grid"><div class="stat top"><div class="stat-top">Open requests <span class="stat-icon">☷</span></div><div class="stat-number">${open.length}</div><div class="stat-bottom">Being processed</div></div><div class="stat"><div class="stat-top">Ready to collect <span class="stat-icon">✓</span></div><div class="stat-number">${ready.length}</div><div class="stat-bottom">Awaiting your collection</div></div></div>` +
-    `<div class="two-columns"><section class="panel"><div class="panel-heading"><div><h2>My recent tickets</h2><div class="panel-sub">Only your own requests are shown</div></div><button class="heading-link btn tiny" data-view="orders">All my tickets →</button></div>${data.tickets.length ? `<div class="ticket-list">${data.tickets.slice(0, 5).map(ticketRow).join("")}</div>` : `<div class="empty-state"><span class="empty-illustration">☷</span>No requests yet. Tap New order to request supplies.</div>`}</section><aside>${sharedNotice()}<div style="height:17px"></div><div class="notice"><strong>Normal WhatsApp still works</strong>You can keep messaging the stock controller on WhatsApp as usual. Orders placed here appear for them immediately, without copying any messages.</div></aside></div>`
   );
 }
 function ticketRow(t) {
@@ -162,7 +151,6 @@ function orders() {
   const tks = ui.ticketFilter === "All" ? data.tickets : data.tickets.filter((t) => t.status === ui.ticketFilter);
   const table = `<div class="filters">${["All", "review", "new", "preparing", "ready", "collected", "cancelled"].map((st) => `<button data-action="ticket-filter" data-status="${st}" class="filter ${ui.ticketFilter === st ? "active" : ""}">${st === "All" ? "All tickets" : STATUSES[st]} (${st === "All" ? data.tickets.length : data.tickets.filter((t) => t.status === st).length})</button>`).join("")}</div>
  <section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Ticket</th><th>Manager / site</th><th>Items</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>${tks.map((t) => `<tr><td><strong>${esc(t.id)}</strong>${t.pendingWrite ? '<span class="small-muted">syncing…</span>' : ""}</td><td><strong>${esc(t.manager)}</strong><span class="small-muted">${esc(t.site || "No site supplied")}</span></td><td>${t.lines.length} products</td><td>${esc(dateFmt(t.createdAt))}</td><td>${statusBadge(t.status)}</td><td><button class="btn tiny" data-action="ticket-detail" data-id="${esc(t.id)}">View ›</button></td></tr>`).join("")}</tbody></table></div>${!tks.length ? '<div class="empty-state">No tickets in this category.</div>' : ""}</section>`;
-  if (isManager()) return title("MY REQUESTS", "My order tickets", "Requests you placed in the app, and WhatsApp orders the stock controller linked to you.", btn("＋ New order", "manager-order")) + table;
   return (
     title("MANAGER REQUESTS", "Order tickets", "Paste a normal WhatsApp message and a ticket is created immediately.", btn("＋ Manual order", "new-order")) +
     `<section class="panel" style="padding:20px;margin-bottom:17px">
@@ -220,23 +208,21 @@ function settings() {
   );
 }
 function staffPanel() {
-  return `<div style="height:18px"></div><section class="panel"><div class="panel-heading"><div><h2>Staff & roles</h2><div class="panel-sub">Logins are created in the Firebase console (Authentication → Add user). Paste the user's UID here to give them access.</div></div>${btn("＋ Add person", "edit-user", "tiny")}</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Role</th><th>Sites</th><th>Status</th><th></th></tr></thead><tbody>${session.users
-    .map((u) => `<tr><td><strong>${esc(u.displayName)}</strong><span class="small-muted">${esc(u.email || u.uid)}</span></td><td>${esc(ROLE_LABELS[u.role] || u.role)}</td><td>${esc((u.sites || []).join(", ") || "—")}</td><td>${u.active ? "Active" : "Disabled"}</td><td><button class="btn tiny" data-action="edit-user" data-id="${esc(u.uid)}">Edit</button></td></tr>`)
+  return `<div style="height:18px"></div><section class="panel"><div class="panel-heading"><div><h2>Staff & roles</h2><div class="panel-sub">Logins are created in the Firebase console (Authentication → Add user). Paste the user's UID here to give them access.</div></div>${btn("＋ Add person", "edit-user", "tiny")}</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${session.users
+    .map((u) => `<tr><td><strong>${esc(u.displayName)}</strong><span class="small-muted">${esc(u.email || u.uid)}</span></td><td>${esc(ROLE_LABELS[u.role] || u.role)}</td><td>${u.active ? "Active" : "Disabled"}</td><td><button class="btn tiny" data-action="edit-user" data-id="${esc(u.uid)}">Edit</button></td></tr>`)
     .join("")}</tbody></table></div>${session.users.length ? "" : '<div class="empty-state">No staff profiles yet.</div>'}</section>`;
 }
 function authScreen() {
   const st = session.authState;
   if (st === "loading") return `<div class="empty-state" style="margin-top:80px">Connecting to the shared database…</div>`;
   if (st === "no-profile" || st === "inactive") {
-    return `<section class="panel" style="max-width:520px;margin:40px auto;padding:24px"><h2>${st === "inactive" ? "Account disabled" : "Waiting for access"}</h2><p class="subtitle">${st === "inactive" ? "An admin has disabled this account." : "You are signed in, but an admin has not given this account a role yet."} Send the admin this user ID:</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;background:#f3f7f5;padding:12px;border-radius:10px">${esc(session.authUser?.uid || "")}</pre><div class="modal-actions">${btn("Sign out", "sign-out", "")}</div></section>`;
+    return `<section class="panel" style="max-width:520px;margin:40px auto;padding:24px"><h2>${st === "inactive" ? "No access" : "Waiting for access"}</h2><p class="subtitle">${st === "inactive" ? "This account is disabled or does not have a staff role. Only admins and stock controllers use this app." : "You are signed in, but an admin has not given this account a role yet."} Send the admin this user ID:</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;background:#f3f7f5;padding:12px;border-radius:10px">${esc(session.authUser?.uid || "")}</pre><div class="modal-actions">${btn("Sign out", "sign-out", "")}</div></section>`;
   }
   return `<section class="panel" style="max-width:440px;margin:40px auto;padding:24px"><p class="eyebrow">STOCK CONTROL</p><h2>Sign in</h2><p class="subtitle">Use the email and password the admin set up for you.</p><form id="signin-form" style="margin-top:16px"><div class="field"><label for="signin-email">Email</label><input id="signin-email" type="email" autocomplete="username" required maxlength="200" /></div><div class="field"><label for="signin-password">Password</label><input id="signin-password" type="password" autocomplete="current-password" required /></div><div class="modal-actions">${btn("Forgot password", "reset-password", "")}<button class="btn primary" type="submit">Sign in</button></div></form>${session.error ? `<div class="notice warning" style="margin-top:12px">${esc(session.error)}</div>` : ""}</section>`;
 }
 
 const VIEWS = { dashboard, inventory, orders, transfers, activity, settings };
-const STAFF_ONLY = ["inventory", "transfers", "activity", "settings"];
 function allowedView(v) {
-  if (isManager() && STAFF_ONLY.includes(v)) return "dashboard";
   return VIEWS[v] ? v : "dashboard";
 }
 
@@ -371,16 +357,11 @@ function redrawLines() {
   const host = document.querySelector("#line-host");
   if (host) host.innerHTML = ui.draftLines.map(draftLineHTML).join("");
 }
-function managerOptions(selectedUid) {
-  const managers = session.users.filter((u) => u.role === "site-manager" && u.active);
-  if (!isShared() || !managers.length) return "";
-  return `<div class="field full"><label for="link-manager">Linked manager account (optional — lets them follow this ticket in the app)</label><select id="link-manager"><option value="">Not linked</option>${managers.map((u) => `<option value="${esc(u.uid)}" ${u.uid === selectedUid ? "selected" : ""}>${esc(u.displayName)}${(u.sites || []).length ? " · " + esc(u.sites.join(", ")) : ""}</option>`).join("")}</select></div>`;
-}
 function newOrder() {
   ui.draftLines = [{ productId: PRODUCTS[0].id, quantity: 1 }];
   ui.modal = { type: "form" };
   modal(
-    `<form id="order-form"><div class="notice"><strong>Received in normal WhatsApp?</strong>Copy the manager's message from WhatsApp, paste it below, tap Read product lines, then check the quantities. The app cannot access your chats directly.</div><div style="height:13px"></div><div class="form-grid"><div class="field"><label for="order-manager">Manager name *</label><input id="order-manager" required maxlength="100" placeholder="e.g. Site manager" /></div><div class="field"><label for="order-phone">Manager's regular WhatsApp number</label><input id="order-phone" inputmode="tel" placeholder="e.g. +27 82 123 4567" /></div><div class="field full"><label for="order-site">Site / property / department</label><input id="order-site" maxlength="120" placeholder="Where the supplies are needed" /></div>${managerOptions("")}</div>
+    `<form id="order-form"><div class="notice"><strong>Received in normal WhatsApp?</strong>Copy the manager's message from WhatsApp, paste it below, tap Read product lines, then check the quantities. The app cannot access your chats directly.</div><div style="height:13px"></div><div class="form-grid"><div class="field"><label for="order-manager">Manager name *</label><input id="order-manager" required maxlength="100" placeholder="e.g. Site manager" /></div><div class="field"><label for="order-phone">Manager's regular WhatsApp number</label><input id="order-phone" inputmode="tel" placeholder="e.g. +27 82 123 4567" /></div><div class="field full"><label for="order-site">Site / property / department</label><input id="order-site" maxlength="120" placeholder="Where the supplies are needed" /></div></div>
  <div class="field"><label for="order-message">Paste message from normal WhatsApp (optional)</label><textarea id="order-message" placeholder="Example:\n2 x Pine gel 5 L\n1 x Two-stroke oil 500 ml\n3 x Black bags"></textarea><div class="actions">${btn("↳ Read product lines", "parse-order", "")}</div><small>Matched items are only suggestions. Check all products and quantities before creating the ticket.</small></div><div id="unmatched-lines"></div>
  <div class="section-header"><strong>Order items *</strong>${btn("＋ Add product", "add-line", "tiny")}</div><div class="line-rows" id="line-host"></div><div class="field" style="margin-top:16px"><label for="order-notes">Notes</label><textarea id="order-notes" style="min-height:68px" maxlength="1500" placeholder="Optional preparation or collection instructions"></textarea></div><div class="modal-actions">${btn("Cancel", "close-modal", "")}<button type="submit" class="btn primary">Create order ticket</button></div></form>`,
     "New manager order",
@@ -388,19 +369,6 @@ function newOrder() {
   );
   redrawLines();
 }
-function managerOrder() {
-  ui.draftLines = [{ productId: PRODUCTS[0].id, quantity: 1 }];
-  ui.modal = { type: "form" };
-  const sites = session.user?.sites || [];
-  modal(
-    `<form id="manager-order-form"><div class="notice"><strong>Order directly in the app</strong>Your request is sent to the stock controller as soon as the server confirms it. You can still chat on normal WhatsApp as usual.</div><div class="form-grid" style="margin-top:13px"><div class="field full"><label for="mo-site">Site / property</label><select id="mo-site"><option value="">${sites.length ? "Choose a site" : "No site assigned"}</option>${sites.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join("")}</select></div></div>
- <div class="section-header"><strong>Products and quantities *</strong>${btn("＋ Add product", "add-line", "tiny")}</div><div class="line-rows" id="line-host"></div><div class="field" style="margin-top:16px"><label for="mo-notes">Notes</label><textarea id="mo-notes" style="min-height:68px" maxlength="1500" placeholder="Optional collection details"></textarea></div><div class="modal-actions">${btn("Cancel", "close-modal", "")}<button type="submit" class="btn primary">Submit order</button></div></form>`,
-    "New stock order",
-    true,
-  );
-  redrawLines();
-}
-
 function ticketDetails(id) {
   const t = data.tickets.find((x) => x.id === id);
   ui.modal = { type: "ticket", id };
@@ -465,7 +433,6 @@ function reviewTicket(id) {
    <div class="field"><label for="review-manager">Manager name *</label><input id="review-manager" maxlength="100" required value="${esc(t.manager === D.MANAGER_PLACEHOLDER ? "" : t.manager)}" /></div>
    <div class="field"><label for="review-phone">Regular WhatsApp number (optional)</label><input id="review-phone" inputmode="tel" value="${esc(t.phone || "")}" /></div>
    <div class="field full"><label for="review-site">Site / property</label><input id="review-site" maxlength="120" value="${esc(t.site || "")}" /></div>
-   ${managerOptions(t.managerUid)}
   </div>
   ${Array.isArray(t.reviewLines) && t.reviewLines.length ? `<div class="notice warning"><strong>Unmatched text from original order</strong>${t.reviewLines.map((line) => `<div>${esc(line)}</div>`).join("")}</div>` : ""}
   <div class="section-header"><strong>Confirmed products and quantities *</strong>${btn("＋ Add product", "add-line", "tiny")}</div><div id="line-host" class="line-rows"></div>
@@ -519,10 +486,10 @@ function transferDialog(sourceId) {
   );
 }
 function userDialog(uid) {
-  const u = session.users.find((x) => x.uid === uid) || { uid: "", role: "stock-controller", active: true, displayName: "", email: "", phone: "", sites: [] };
+  const u = session.users.find((x) => x.uid === uid) || { uid: "", role: "stock-controller", active: true, displayName: "", email: "" };
   ui.modal = { type: "form" };
   modal(
-    `<form id="user-form"><div class="notice"><strong>How access works</strong>1. Create the login in Firebase console → Authentication → Add user. 2. Copy the User UID. 3. Paste it here and choose the role. Roles are checked by the server on every change.</div><div class="form-grid" style="margin-top:14px"><div class="field full"><label for="user-uid">User UID *</label><input id="user-uid" required maxlength="128" value="${esc(u.uid)}" ${u.uid ? "readonly" : ""} /></div><div class="field"><label for="user-name">Name *</label><input id="user-name" required maxlength="100" value="${esc(u.displayName)}" /></div><div class="field"><label for="user-email">Email (for reference)</label><input id="user-email" type="email" maxlength="200" value="${esc(u.email || "")}" /></div><div class="field"><label for="user-role">Role *</label><select id="user-role">${Object.entries(ROLE_LABELS).map(([k, v]) => `<option value="${k}" ${u.role === k ? "selected" : ""}>${v}</option>`).join("")}</select></div><div class="field"><label for="user-active">Access</label><select id="user-active"><option value="1" ${u.active ? "selected" : ""}>Active</option><option value="0" ${u.active ? "" : "selected"}>Disabled</option></select></div><div class="field"><label for="user-phone">WhatsApp number (optional)</label><input id="user-phone" inputmode="tel" maxlength="30" value="${esc(u.phone || "")}" /></div><div class="field"><label for="user-sites">Sites (managers; separate with commas)</label><input id="user-sites" maxlength="600" value="${esc((u.sites || []).join(", "))}" /></div></div><p class="footer-note">Admin: manage staff. Stock controller: tickets and stock. Site manager: own orders only — cannot change stock or see other managers' data.</p><div class="modal-actions">${btn("Cancel", "close-modal", "")}<button type="submit" class="btn primary">Save person</button></div></form>`,
+    `<form id="user-form"><div class="notice"><strong>How access works</strong>1. Create the login in Firebase console → Authentication → Add user. 2. Copy the User UID. 3. Paste it here and choose the role. Roles are checked by the server on every change.</div><div class="form-grid" style="margin-top:14px"><div class="field full"><label for="user-uid">User UID *</label><input id="user-uid" required maxlength="128" value="${esc(u.uid)}" ${u.uid ? "readonly" : ""} /></div><div class="field"><label for="user-name">Name *</label><input id="user-name" required maxlength="100" value="${esc(u.displayName)}" /></div><div class="field"><label for="user-email">Email (for reference)</label><input id="user-email" type="email" maxlength="200" value="${esc(u.email || "")}" /></div><div class="field"><label for="user-role">Role *</label><select id="user-role">${Object.entries(ROLE_LABELS).map(([k, v]) => `<option value="${k}" ${u.role === k ? "selected" : ""}>${v}</option>`).join("")}</select></div><div class="field"><label for="user-active">Access</label><select id="user-active"><option value="1" ${u.active ? "selected" : ""}>Active</option><option value="0" ${u.active ? "" : "selected"}>Disabled</option></select></div></div><p class="footer-note">Admin: everything, including staff and settings. Stock controller: tickets and stock. Site managers do not get accounts — they keep sending requests on normal WhatsApp.</p><div class="modal-actions">${btn("Cancel", "close-modal", "")}<button type="submit" class="btn primary">Save person</button></div></form>`,
     u.uid ? "Edit " + u.displayName : "Add a person",
     true,
   );
@@ -608,9 +575,6 @@ document.addEventListener("click", (e) => {
       break;
     case "new-order":
       newOrder();
-      break;
-    case "manager-order":
-      managerOrder();
       break;
     case "stock-receive":
       openStock();
@@ -771,15 +735,8 @@ document.addEventListener("change", (e) => {
     const c = CONVERSIONS.find((x) => x.source === e.target.value);
     document.querySelector("#transfer-preview").textContent = `${qty(c.source)} available · 1 large container becomes ${c.ratio} smaller containers`;
   }
-  if (e.target.id === "link-manager" && e.target.value) {
-    const u = session.users.find((x) => x.uid === e.target.value);
-    const nameEl = document.querySelector("#review-manager") || document.querySelector("#order-manager");
-    const phoneEl = document.querySelector("#review-phone") || document.querySelector("#order-phone");
-    if (u && nameEl && !nameEl.value.trim()) nameEl.value = u.displayName;
-    if (u && phoneEl && !phoneEl.value.trim() && u.phone) phoneEl.value = u.phone;
-  }
 });
-const FORMS = ["stock-form", "order-form", "transfer-form", "settings-form", "review-ticket-form", "manager-order-form", "user-form", "legacy-form", "signin-form"];
+const FORMS = ["stock-form", "order-form", "transfer-form", "settings-form", "review-ticket-form", "user-form", "legacy-form", "signin-form"];
 document.addEventListener("submit", async (e) => {
   if (!FORMS.includes(e.target.id)) return;
   e.preventDefault();
@@ -795,9 +752,8 @@ document.addEventListener("submit", async (e) => {
   if (form === "review-ticket-form") {
     syncDraft();
     const id = val("#review-ticket-id");
-    const linked = document.querySelector("#link-manager");
     const res = await run(submitBtn, () =>
-      backend.reviewTicket(id, { manager: val("#review-manager"), phone: val("#review-phone"), site: val("#review-site"), notes: val("#review-notes"), lines: ui.draftLines, managerUid: linked ? linked.value || null : undefined }),
+      backend.reviewTicket(id, { manager: val("#review-manager"), phone: val("#review-phone"), site: val("#review-site"), notes: val("#review-notes"), lines: ui.draftLines }),
       "Ticket confirmed. You can now prepare the order.",
     );
     if (res) {
@@ -849,9 +805,8 @@ document.addEventListener("submit", async (e) => {
   }
   if (form === "order-form") {
     syncDraft();
-    const linked = document.querySelector("#link-manager");
     const res = await run(submitBtn, () =>
-      backend.createTicket({ manager: val("#order-manager"), phone: val("#order-phone"), site: val("#order-site"), rawMessage: val("#order-message"), notes: val("#order-notes"), lines: ui.draftLines, managerUid: linked?.value || null }),
+      backend.createTicket({ manager: val("#order-manager"), phone: val("#order-phone"), site: val("#order-site"), rawMessage: val("#order-message"), notes: val("#order-notes"), lines: ui.draftLines }),
     );
     if (res) {
       const ticketId = res.ticket?.id || res.ticketId;
@@ -862,20 +817,9 @@ document.addEventListener("submit", async (e) => {
     }
     return;
   }
-  if (form === "manager-order-form") {
-    syncDraft();
-    const res = await run(submitBtn, () => backend.createInAppOrder({ site: val("#mo-site"), notes: val("#mo-notes"), lines: ui.draftLines }));
-    if (res) {
-      closeModal();
-      navigate("orders");
-      ticketDetails(res.ticketId);
-      notify(`Order ${res.ticketId} sent to the stock controller.`);
-    }
-    return;
-  }
   if (form === "user-form") {
     const ok = await run(submitBtn, async () => (
-      await backend.saveUser(val("#user-uid"), { role: val("#user-role"), active: val("#user-active") === "1", displayName: val("#user-name"), email: val("#user-email"), phone: val("#user-phone"), sites: val("#user-sites").split(",") }), true
+      await backend.saveUser(val("#user-uid"), { role: val("#user-role"), active: val("#user-active") === "1", displayName: val("#user-name"), email: val("#user-email") }), true
     ), "Access saved. The person's app updates automatically.");
     if (ok) closeModal();
     return;

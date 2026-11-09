@@ -23,12 +23,11 @@ def post(url, body, headers=None, method="POST"):
         return json.loads(r.read() or b"{}")
 
 
-def make_user(email, role, name, sites=()):
+def make_user(email, role, name):
     uid = post(f"{AUTH}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key", {"email": email, "password": "password123", "returnSecureToken": True})["localId"]
     fields = {
         "role": {"stringValue": role}, "active": {"booleanValue": True}, "displayName": {"stringValue": name},
-        "email": {"stringValue": email}, "phone": {"stringValue": ""},
-        "sites": {"arrayValue": {"values": [{"stringValue": s} for s in sites]}},
+        "email": {"stringValue": email},
         "updatedAt": {"timestampValue": "2026-11-09T00:00:00Z"}, "updatedBy": {"stringValue": "console"}, "lastAuditId": {"stringValue": "bootstrap"},
     }
     # "Bearer owner" bypasses rules in the emulator — the equivalent of the owner using the Firebase console.
@@ -54,7 +53,7 @@ def nav(page, view):
 errors = []
 make_user("admin@example.test", "admin", "Ada Admin")
 make_user("ctrl@example.test", "stock-controller", "Cara Controller")
-make_user("mgr@example.test", "site-manager", "Thabo Manager", ["Complex A"])
+make_user("mgr@example.test", "site-manager", "Thabo Manager")  # must get no access
 
 with sync_playwright() as p:
     exe = os.environ.get("CHROMIUM_PATH")
@@ -124,24 +123,19 @@ with sync_playwright() as p:
     nav(admin, "inventory")
     expect(admin.locator(".product").filter(has_text="Pine gel").filter(has_text="5 L bucket").locator(".stock-qty")).to_contain_text("10", timeout=15000)
 
-    # Manager: own tickets only, no stock screens, in-app order.
+    # Only admins and stock controllers use the app: a site-manager account sees "No access" and no data.
     mgr = browser.new_context(viewport={"width": 390, "height": 844}).new_page()
     mgr.on("pageerror", lambda e: errors.append("mgr: " + str(e)))
-    sign_in(mgr, "mgr@example.test")
-    expect(mgr.get_by_text("My stock requests")).to_be_visible()
-    assert mgr.locator('button[data-view="inventory"]').first.evaluate("e => getComputedStyle(e).display") == "none"
-    mgr.get_by_role("button", name="＋ New order").first.click()
-    mgr.locator("#mo-site").select_option("Complex A")
-    mgr.locator(".order-product").first.select_option("black-bags")
-    mgr.locator(".order-qty").first.fill("3")
-    mgr.get_by_role("button", name="Submit order").click()
-    expect(mgr.get_by_text("sent to the stock controller")).to_be_visible(timeout=15000)
-    mgr.screenshot(path=str(shots / "firebase-manager-order.png"))
-    ctrl.locator(".modal-actions").get_by_role("button", name="Close", exact=True).click()
-    expect(ctrl.locator("table.data-table")).to_contain_text("Thabo Manager", timeout=15000)
+    mgr.goto(APP, wait_until="domcontentloaded")
+    mgr.locator("#signin-email").fill("mgr@example.test")
+    mgr.locator("#signin-password").fill("password123")
+    mgr.get_by_role("button", name="Sign in").click()
+    expect(mgr.get_by_text("No access")).to_be_visible(timeout=20000)
+    assert mgr.locator("table.data-table").count() == 0
+    assert ticket_id not in mgr.content()
     admin.screenshot(path=str(shots / "firebase-admin.png"), full_page=True)
 
     browser.close()
 
 assert not errors, f"Page JavaScript errors: {errors}"
-print("PASS (firebase e2e): sign-in, first-time setup, live sync across devices, instant paste ticket, duplicate guard, review/confirm, collection deducts once, manager in-app order")
+print("PASS (firebase e2e): sign-in, first-time setup, live sync across devices, instant paste ticket, duplicate guard, review/confirm, collection deducts once, non-staff account has no access")

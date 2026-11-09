@@ -8,12 +8,12 @@ Status: development branch `firebase-backend`. Nothing has been deployed. The co
 |---|---|
 | Approved design, 16 products, image mapping | Firebase Authentication (email + password) |
 | Quick WhatsApp Paste → instant `review` ticket, no Create button | Shared Cloud Firestore data across devices |
-| Statuses Needs review → New → Preparing → Ready → Collected / Cancelled | Server-enforced roles: admin, stock controller, site manager |
+| Statuses Needs review → New → Preparing → Ready → Collected / Cancelled | Server-enforced roles: admin and stock controller only |
 | Stock deducted only on collection, once, never negative | Security rules that check every stock change |
 | Normal WhatsApp click-to-chat drafts; a person taps Send | Append-only audit log of ticket and staff changes |
 | Local prototype mode (still the default) | Offline queue for pastes; read-only offline viewing |
 | | Admin-reviewed import from a prototype JSON backup |
-| | Phase 2: site-manager in-app order form |
+| Site managers order only via normal WhatsApp (no app accounts) | |
 
 There is no WhatsApp Business, Cloud API, BSP, webhook, bot, QR session or automatic sending anywhere. Opening a draft is never recorded as delivery.
 
@@ -38,21 +38,21 @@ There is still no build step. The Firebase SDK is loaded as versioned ES modules
 
 | Path | Purpose | Who can read | Who can write |
 |---|---|---|---|
-| `users/{uid}` | `role`, `active`, `displayName`, `email`, `phone`, `sites[]` | self; staff | admin only (with audit entry). Admins cannot demote themselves |
+| `users/{uid}` | `role` (`admin` or `stock-controller`), `active`, `displayName`, `email` | self; staff | admin only (with audit entry). Admins cannot demote themselves |
 | `inventory/balances` | `onHand {productId: packs}`, `version`, `lastMovementId` | staff | staff, **only together with a new movement** that explains the change |
 | `stockMovements/{id}` | immutable `kind`, `added{}`, `removed{}`, `reason`, `ticketId`, `actorUid`, `at` | staff | staff (create only) |
-| `tickets/{SC-YYYYMMDD-####}` | manager, site, phone, `items{}`, `rawMessage`, `reviewLines[]`, status + who/when stamps | staff; the linked manager | staff (lifecycle); managers create in-app orders |
-| `counters/tickets-YYYYMMDD` | daily ticket sequence | signed-in users | only while creating the matching ticket |
+| `tickets/{SC-YYYYMMDD-####}` | manager, site, phone, `items{}`, `rawMessage`, `reviewLines[]`, status + who/when stamps | staff | staff |
+| `counters/tickets-YYYYMMDD` | daily ticket sequence | staff | only while creating the matching ticket |
 | `pasteLocks/{sha256}` | cross-device duplicate-paste guard | staff | only while creating a ticket |
 | `auditLogs/{id}` | append-only events with server time | staff | must be created in the same write as the ticket/user change it describes |
-| `products/{id}` | catalogue reference copy (seeded by setup) | signed-in users | admin |
-| `settings/app`, `settings/conversions` | company name, low-stock level; pack ratios | signed-in users | admin |
+| `products/{id}` | catalogue reference copy (seeded by setup) | staff | admin |
+| `settings/app`, `settings/conversions` | company name, low-stock level; pack ratios | staff | admin |
 
 ### Changes from the suggested model
 
 * **One `inventory/balances` document instead of `stockBalances/{productId}`.** Security rules cannot loop and have a limited number of document reads per request. With one document, a single rule can check that *every* product changed in a collection equals `old − removed + added` and stays ≥ 0, however many lines the ticket has. Throughput limit: about one stock change per second sustained, which is far above what one stock desk needs. If volumes ever grow, move stock writes to Cloud Functions (needs the Blaze plan).
 * **`items` is a `{productId: quantity}` map instead of a list.** Rules can compare maps directly, so "the stock removed equals the ticket's items" is one check.
-* **Sites are a list on the manager's user profile** (`sites: ["Complex A"]`), not a separate collection. Tickets keep the site name as text. That is enough for assigning managers and for the in-app order form, and avoids another collection to secure. A `sites` collection can be added later without migration.
+* **No `sites` collection.** The site stays a text field on each ticket, typed by the controller, because site managers have no accounts.
 
 ## 4. How integrity is enforced (server side)
 
@@ -65,7 +65,7 @@ Firestore rules (`firestore.rules`) are the boundary. The app's own checks only 
 5. **The original pasted message, source, creation time and creator can never be edited.**
 6. **Conversions** must use the ratio stored in `settings/conversions` (for example 1 × Pine gel 20 L = 4 × 5 L).
 7. **Every ticket and staff change writes an audit entry in the same request**, stamped with server time and the signed-in user.
-8. **Managers** can read only tickets whose `managerUid` is theirs. They can create only `in-app-order` tickets in their own name and for their own sites, and cannot read stock, movements, audit logs or other people's profiles.
+8. **Only admins and stock controllers have access.** Any other login, including a profile with any other role, can read and write nothing; it can only see that its own profile is missing, so the app can show the user's ID.
 
 Rules cannot loop, so per-product checks are unrolled for up to **20 products per ticket**. The catalogue has 16. A test fails if the product list in the rules and in `domain.js` ever differ.
 
@@ -85,7 +85,7 @@ Rules cannot loop, so per-product checks are unrolled for up to **20 products pe
 
 * The repository contains no real names, phone numbers, messages, keys or project ids. Tests use made-up names and the `demo-stock-control` emulator project.
 * The Firebase **web config is not a secret**; access is controlled by sign-in and rules. On Firebase Hosting the app reads the config from `/__/firebase/init.json`, so nothing project-specific needs committing.
-* Phone numbers and pasted messages are readable only by staff, plus the linked manager for their own ticket. The controller's own WhatsApp number is stored only on their device.
+* Phone numbers and pasted messages are readable only by admins and stock controllers. The controller's own WhatsApp number is stored only on their device.
 * No service-account keys or Admin SDK are needed for normal operation.
 
 ## 8. Migration from the local prototype
@@ -96,9 +96,9 @@ Settings → *Review a prototype backup* (admin only):
 2. Tickets are created as `LEGACY-<old id>`, so importing the same file twice is skipped, never duplicated. Open tickets come in as **Needs review** to be confirmed again. Collected and cancelled tickets are kept as history and do not touch stock.
 3. Stock counts are applied only if ticked, as one *Imported count* movement with a deterministic id (cannot be applied twice). Old stock-history rows stay in the backup file.
 
-## 9. Phase 2 — manager in-app orders (included)
+## 9. Site managers
 
-A signed-in site manager sees *My stock requests* and a **New order** form: catalogue products, quantities, site from their profile, and notes. Submitting creates a `new` ticket immediately in the shared queue, with no WhatsApp message to copy. Managers and controllers keep talking on normal WhatsApp as usual. Staff can also link a pasted ticket to a manager's account (*Linked manager account* on review) so that manager can follow it in the app.
+Site managers do **not** use the app. They send requests on normal WhatsApp, and a stock controller pastes each message into Quick WhatsApp Paste. The handoff's optional Phase 2 in-app order form was deliberately left out at the owner's request.
 
 ## 10. Known limits / follow-ups
 
