@@ -42,7 +42,8 @@ service cloud.firestore {
     function qOk(m, k, max) { return m[k] is int && m[k] >= 1 && m[k] <= max; }
     // Rules cannot loop: this nested check stops at the end of the list, so short tickets stay cheap.
     function qtyPart(m, ks, max) {
-      return (ks.size() == 0 || (qOk(m, ks[0], max) && (ks.size() == 1 || (qOk(m, ks[1], max) && (ks.size() == 2 || (qOk(m, ks[2], max) && (ks.size() == 3 || (qOk(m, ks[3], max) && (ks.size() == 4 || (qOk(m, ks[4], max) && (ks.size() == 5 || (qOk(m, ks[5], max) && (ks.size() == 6 || (qOk(m, ks[6], max) && (ks.size() == 7 || (qOk(m, ks[7], max) && (ks.size() == 8 || (qOk(m, ks[8], max) && (ks.size() == 9 || (qOk(m, ks[9], max) && (ks.size() == 10 || (qOk(m, ks[10], max) && (ks.size() == 11 || (qOk(m, ks[11], max) && (ks.size() == 12 || (qOk(m, ks[12], max) && (ks.size() == 13 || (qOk(m, ks[13], max) && (ks.size() == 14 || (qOk(m, ks[14], max) && (ks.size() == 15 || (qOk(m, ks[15], max) && (ks.size() == 16 || (qOk(m, ks[16], max) && (ks.size() == 17 || (qOk(m, ks[17], max) && (ks.size() == 18 || (qOk(m, ks[18], max) && (ks.size() == 19 || qOk(m, ks[19], max))))))))))))))))))))))))))))))))))))))));
+      let c = ks.size();
+      return (c == 0 || (qOk(m, ks[0], max) && (c == 1 || (qOk(m, ks[1], max) && (c == 2 || (qOk(m, ks[2], max) && (c == 3 || (qOk(m, ks[3], max) && (c == 4 || (qOk(m, ks[4], max) && (c == 5 || (qOk(m, ks[5], max) && (c == 6 || (qOk(m, ks[6], max) && (c == 7 || (qOk(m, ks[7], max) && (c == 8 || (qOk(m, ks[8], max) && (c == 9 || (qOk(m, ks[9], max) && (c == 10 || (qOk(m, ks[10], max) && (c == 11 || (qOk(m, ks[11], max) && (c == 12 || (qOk(m, ks[12], max) && (c == 13 || (qOk(m, ks[13], max) && (c == 14 || (qOk(m, ks[14], max) && (c == 15 || (qOk(m, ks[15], max) && (c == 16 || (qOk(m, ks[16], max) && (c == 17 || (qOk(m, ks[17], max) && (c == 18 || (qOk(m, ks[18], max) && (c == 19 || qOk(m, ks[19], max))))))))))))))))))))))))))))))))))))))));
     }
     // A {productId: positive whole quantity} map of catalogue products, at most 20 entries.
     function qtyMap(m, max) { return m is map && m.size() <= 20 && m.keys().hasOnly(productIds()) && qtyPart(m, m.keys(), max); }
@@ -118,12 +119,16 @@ service cloud.firestore {
     function mvPath(id) { return /databases/$(database)/documents/stockMovements/$(id); }
     function balancesPath() { return /databases/$(database)/documents/inventory/balances; }
 
-    function balKey(o, n, mv, k) {
-      return n.get(k, -1) is int && n.get(k, -1) >= 0
-        && n.get(k, -1) == o.get(k, 0) - mv.removed.get(k, 0) + mv.added.get(k, 0);
+    function balKey(o, n, r, ad, k) {
+      let v = n.get(k, -1);
+      return v >= 0 && v == o.get(k, 0) - r.get(k, 0) + ad.get(k, 0);
     }
     function balPart(o, n, mv) {
-      return (mv.productIds.size() == 0 || (balKey(o, n, mv, mv.productIds[0]) && (mv.productIds.size() == 1 || (balKey(o, n, mv, mv.productIds[1]) && (mv.productIds.size() == 2 || (balKey(o, n, mv, mv.productIds[2]) && (mv.productIds.size() == 3 || (balKey(o, n, mv, mv.productIds[3]) && (mv.productIds.size() == 4 || (balKey(o, n, mv, mv.productIds[4]) && (mv.productIds.size() == 5 || (balKey(o, n, mv, mv.productIds[5]) && (mv.productIds.size() == 6 || (balKey(o, n, mv, mv.productIds[6]) && (mv.productIds.size() == 7 || (balKey(o, n, mv, mv.productIds[7]) && (mv.productIds.size() == 8 || (balKey(o, n, mv, mv.productIds[8]) && (mv.productIds.size() == 9 || (balKey(o, n, mv, mv.productIds[9]) && (mv.productIds.size() == 10 || (balKey(o, n, mv, mv.productIds[10]) && (mv.productIds.size() == 11 || (balKey(o, n, mv, mv.productIds[11]) && (mv.productIds.size() == 12 || (balKey(o, n, mv, mv.productIds[12]) && (mv.productIds.size() == 13 || (balKey(o, n, mv, mv.productIds[13]) && (mv.productIds.size() == 14 || (balKey(o, n, mv, mv.productIds[14]) && (mv.productIds.size() == 15 || (balKey(o, n, mv, mv.productIds[15]) && (mv.productIds.size() == 16 || (balKey(o, n, mv, mv.productIds[16]) && (mv.productIds.size() == 17 || (balKey(o, n, mv, mv.productIds[17]) && (mv.productIds.size() == 18 || (balKey(o, n, mv, mv.productIds[18]) && (mv.productIds.size() == 19 || balKey(o, n, mv, mv.productIds[19]))))))))))))))))))))))))))))))))))))))));
+      let ids = mv.productIds;
+      let r = mv.removed;
+      let ad = mv.added;
+      let c = ids.size();
+      return (c == 0 || (balKey(o, n, r, ad, ids[0]) && (c == 1 || (balKey(o, n, r, ad, ids[1]) && (c == 2 || (balKey(o, n, r, ad, ids[2]) && (c == 3 || (balKey(o, n, r, ad, ids[3]) && (c == 4 || (balKey(o, n, r, ad, ids[4]) && (c == 5 || (balKey(o, n, r, ad, ids[5]) && (c == 6 || (balKey(o, n, r, ad, ids[6]) && (c == 7 || (balKey(o, n, r, ad, ids[7]) && (c == 8 || (balKey(o, n, r, ad, ids[8]) && (c == 9 || (balKey(o, n, r, ad, ids[9]) && (c == 10 || (balKey(o, n, r, ad, ids[10]) && (c == 11 || (balKey(o, n, r, ad, ids[11]) && (c == 12 || (balKey(o, n, r, ad, ids[12]) && (c == 13 || (balKey(o, n, r, ad, ids[13]) && (c == 14 || (balKey(o, n, r, ad, ids[14]) && (c == 15 || (balKey(o, n, r, ad, ids[15]) && (c == 16 || (balKey(o, n, r, ad, ids[16]) && (c == 17 || (balKey(o, n, r, ad, ids[17]) && (c == 18 || (balKey(o, n, r, ad, ids[18]) && (c == 19 || balKey(o, n, r, ad, ids[19]))))))))))))))))))))))))))))))))))))))));
     }
     function balanceChangeMatchesMovement() {
       let mvId = request.resource.data.lastMovementId;

@@ -44,6 +44,13 @@ def sign_in(page, email):
     expect(page.locator(".sidebar-bottom")).to_contain_text("Online", timeout=20000)
 
 
+def nav(page, view):
+    # On phone widths the sidebar is collapsed behind the ☰ button.
+    if page.locator("#menu-toggle").is_visible():
+        page.locator("#menu-toggle").click()
+    page.locator(f'button[data-view="{view}"]').first.click()
+
+
 errors = []
 make_user("admin@example.test", "admin", "Ada Admin")
 make_user("ctrl@example.test", "stock-controller", "Cara Controller")
@@ -57,10 +64,10 @@ with sync_playwright() as p:
     sign_in(admin, "admin@example.test")
 
     # First-time setup, then receive stock.
-    admin.locator('button[data-view="settings"]').first.click()
+    nav(admin, "settings")
     admin.get_by_role("button", name="Run first-time setup").click()
     expect(admin.get_by_text("First-time setup complete")).to_be_visible(timeout=15000)
-    admin.locator('button[data-view="inventory"]').first.click()
+    nav(admin, "inventory")
     admin.locator('button[data-action="adjust-stock"][data-id="pine-gel-5l"]').click()
     admin.locator("#stock-quantity").fill("12")
     admin.locator("#stock-reason").fill("Supplier delivery")
@@ -72,7 +79,7 @@ with sync_playwright() as p:
     ctrl = ctrl_ctx.new_page()
     ctrl.on("pageerror", lambda e: errors.append("ctrl: " + str(e)))
     sign_in(ctrl, "ctrl@example.test")
-    ctrl.locator('button[data-view="orders"]').first.click()
+    nav(ctrl, "orders")
     ctrl.locator("#quick-paste-message").click()
     ctrl.evaluate("""() => { const t = document.querySelector('#quick-paste-message'); const dt = new DataTransfer(); dt.setData('text/plain', '2 x Pine Gel 5L\\n4 x Two-Stroke Oil 500ml\\n3 x Black Bags'); t.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); }""")
     expect(ctrl.locator(".modal")).to_contain_text("Ticket saved immediately", timeout=15000)
@@ -81,7 +88,7 @@ with sync_playwright() as p:
     ctrl.screenshot(path=str(shots / "firebase-controller-review.png"))
 
     # Admin's screen updates live from the other device.
-    admin.locator('button[data-view="orders"]').first.click()
+    nav(admin, "orders")
     expect(admin.locator("table.data-table")).to_contain_text(ticket_id, timeout=15000)
 
     # Paste the same text again: no duplicate.
@@ -107,7 +114,7 @@ with sync_playwright() as p:
     expect(ctrl.locator(".modal .pill")).to_have_text("Collected", timeout=15000)
     ctrl.screenshot(path=str(shots / "firebase-controller-collected.png"))
 
-    admin.locator('button[data-view="inventory"]').first.click()
+    nav(admin, "inventory")
     expect(admin.locator(".product").filter(has_text="Pine gel").filter(has_text="5 L bucket").locator(".stock-qty")).to_contain_text("10", timeout=15000)
 
     # Manager: own tickets only, no stock screens, in-app order.
@@ -115,7 +122,7 @@ with sync_playwright() as p:
     mgr.on("pageerror", lambda e: errors.append("mgr: " + str(e)))
     sign_in(mgr, "mgr@example.test")
     expect(mgr.get_by_text("My stock requests")).to_be_visible()
-    assert not mgr.locator('button[data-view="inventory"]').first.is_visible()
+    assert mgr.locator('button[data-view="inventory"]').first.evaluate("e => getComputedStyle(e).display") == "none"
     mgr.get_by_role("button", name="＋ New order").first.click()
     mgr.locator("#mo-site").select_option("Complex A")
     mgr.locator(".order-product").first.select_option("black-bags")

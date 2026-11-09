@@ -247,8 +247,8 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
           }),
         ]);
       } catch (e) {
-        if (e?.code === "permission-denied" && attempt < 4 && Date.now() < deadline) {
-          await new Promise((r) => setTimeout(r, 60 * attempt + Math.random() * 140));
+        if (e?.code === "permission-denied" && attempt < 8 && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 50 * attempt + Math.random() * 200 * attempt));
           continue;
         }
         throw friendlyError(e);
