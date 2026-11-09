@@ -226,3 +226,15 @@ test("admin import of a prototype backup: reviewed, no duplicates on re-import",
   assert.equal(again.countsSet, false);
   assert.equal(await countDocs(env, "tickets"), 2);
 });
+
+test("a ticket with every catalogue product can be confirmed and collected (rules stay within limits)", async () => {
+  const ctrl = await device("ctrl");
+  for (const p of D.PRODUCTS) await ctrl.adjustStock({ productId: p.id, mode: "count", amount: 50, reason: "Stocktake" });
+  const lines = D.PRODUCTS.map((p, i) => ({ productId: p.id, quantity: i + 1 }));
+  const { ticketId } = await ctrl.createTicket({ manager: "Thabo", phone: "", site: "", rawMessage: "", notes: "", lines });
+  await ctrl.reviewTicket(ticketId, { manager: "Thabo", phone: "", site: "", notes: "big order", lines });
+  await ctrl.changeStatus(ticketId, "ready");
+  await ctrl.changeStatus(ticketId, "collected");
+  const bal = (await readDoc(env, "inventory/balances")).onHand;
+  D.PRODUCTS.forEach((p, i) => assert.equal(bal[p.id], 50 - (i + 1), p.id));
+});

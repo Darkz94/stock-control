@@ -229,20 +229,32 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
     return new UserError("Something went wrong and nothing was confirmed. " + (e?.message ? "(" + e.message + ")" : ""));
   }
 
+  /** Run a Firestore transaction and resolve only once the server has committed it.
+   * Under contention the emulator (and possibly production) can report a stale write as
+   * permission-denied instead of a retryable conflict, because rules compare against the newer
+   * document. We therefore re-run the whole transaction a few times on fresh data; a genuine
+   * refusal fails every attempt and is reported. */
   async function tx(fn) {
     requireOnline();
-    let timer;
-    try {
-      return await Promise.race([
-        runTransaction(db, fn, { maxAttempts: 5 }),
-        new Promise((_, reject) => {
-          timer = setTimeout(() => reject(new OfflineError("No confirmation from the server yet. Check the ticket list or stock history before trying again.")), timeoutMs);
-        }),
-      ]);
-    } catch (e) {
-      throw friendlyError(e);
-    } finally {
-      clearTimeout(timer);
+    const deadline = Date.now() + timeoutMs;
+    for (let attempt = 1; ; attempt++) {
+      let timer;
+      try {
+        return await Promise.race([
+          runTransaction(db, fn, { maxAttempts: 5 }),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new OfflineError("No confirmation from the server yet. Check the ticket list or stock history before trying again.")), Math.max(1000, deadline - Date.now()));
+          }),
+        ]);
+      } catch (e) {
+        if (e?.code === "permission-denied" && attempt < 4 && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 60 * attempt + Math.random() * 140));
+          continue;
+        }
+        throw friendlyError(e);
+      } finally {
+        clearTimeout(timer);
+      }
     }
   }
 
@@ -288,7 +300,9 @@ export function createFirebaseBackend({ sdk, domain: D, auth, db, storage = null
       const pre = extraReads ? await extraReads(t) : null;
       if (pre?.done) return pre.done;
       const r = await reserveTicketId(t);
-      if ((await t.get(r.ticketRef)).exists()) throw new UserError("Ticket number clash — please try again.");
+      // Belt and braces for staff; managers may not read tickets that are not theirs (the counter
+      // plus the rules already guarantee the number is unused).
+      if (isStaff() && (await t.get(r.ticketRef)).exists()) throw new UserError("Ticket number clash — please try again.");
       const auditId = audit(t, "ticket.created", "ticket", r.ticketId, `Ticket created (${fields.source})`, { status: fields.status, source: fields.source });
       t.set(r.counterRef, { next: r.seq, updatedAt: serverTimestamp() });
       t.set(r.ticketRef, { ...baseTicket(r, fields), lastAuditId: auditId });
