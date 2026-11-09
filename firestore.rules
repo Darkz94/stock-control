@@ -185,8 +185,12 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['kind', 'added', 'removed', 'productIds', 'reason', 'ticketId', 'actorUid', 'at'])
         && request.resource.data.actorUid == uid() && request.resource.data.at == request.time
         && text(request.resource.data.reason, 220)
-        && qtyMap(request.resource.data.added, 1000000) && qtyMap(request.resource.data.removed, 1000000)
+        && request.resource.data.added is map && request.resource.data.removed is map
         && request.resource.data.added.size() + request.resource.data.removed.size() >= 1
+        // A collection's `removed` must equal the ticket's validated items (checked in movementKindOk);
+        // every other kind validates its quantities here.
+        && (request.resource.data.kind == 'collection'
+            || (qtyMap(request.resource.data.added, 1000000) && qtyMap(request.resource.data.removed, 1000000)))
         && !request.resource.data.added.keys().hasAny(request.resource.data.removed.keys())
         && request.resource.data.productIds is list
         && request.resource.data.productIds.size() == request.resource.data.added.size() + request.resource.data.removed.size()
@@ -240,7 +244,7 @@ service cloud.firestore {
         && d.source in ['manual-whatsapp-paste', 'manual-entry', 'in-app-order', 'legacy-import']
         && text(d.manager, 100) && optText(d.managerUid, 128) && text(d.phone, 30) && text(d.site, 120)
         && text(d.notes, 1500) && text(d.rawMessage, 6000)
-        && qtyMap(d.items, 9999)
+        && d.items is map
         && d.reviewLines is list && d.reviewLines.size() <= 80;
     }
     function confirmed(d) {
@@ -253,7 +257,7 @@ service cloud.firestore {
         && c.data.next == d.seq && id == 'SC-' + d.day + '-' + pad4(d.seq);
     }
     function newTicketCommon(id, d) {
-      return d.ticketId == id && ticketShape(d) && stamped(d)
+      return d.ticketId == id && ticketShape(d) && qtyMap(d.items, 9999) && stamped(d)
         && d.createdAt == request.time && d.createdBy == uid() && auditBound(d);
     }
 
@@ -280,6 +284,8 @@ service cloud.firestore {
       return o.status in ['review', 'new', 'preparing', 'ready']
         && !a.hasAny(['ticketId', 'seq', 'day', 'source', 'rawMessage', 'pasteKey', 'createdAt', 'createdBy', 'legacyTicketId', 'legacyCreatedAt'])
         && stamped(n) && ticketShape(n) && auditBound(n)
+        // Items are only re-validated when they change (keeps big collections within rule limits).
+        && (!a.hasAny(['items']) || qtyMap(n.items, 9999))
         && (
           // Review / edit: same ticket, corrected details. review -> new on confirmation.
           (a.hasOnly(['manager', 'managerUid', 'phone', 'site', 'notes', 'items', 'reviewLines', 'reviewedAt', 'reviewedBy', 'status', 'updatedAt', 'updatedBy', 'lastAuditId'])
