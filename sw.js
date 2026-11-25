@@ -1,10 +1,37 @@
-const CACHE='stock-control-v4-catalogue';
-const FILES=['./','./index.html','./styles.css','./app.js','./cloud.js','./manifest.webmanifest','./icon.svg',
+const CACHE='stock-control-v5-catalogue';
+const FILES=['./','./index.html','./styles.css?v=5','./app.js?v=5','./cloud.js?v=5','./manifest.webmanifest','./icon.svg',
 './assets/two-stroke-500ml.webp','./assets/two-stroke-20l.webp','./assets/nylon-line.webp',
 './assets/pine-gel-5l.webp','./assets/pine-gel-20l.webp','./assets/non-selective-20l.webp',
 './assets/non-selective-1l.webp','./assets/selective-20l.webp','./assets/selective-5l.webp',
 './assets/bleach-5l.webp','./assets/toilet-paper.webp','./assets/black-bags.webp',
 './assets/rake.webp','./assets/broom.webp','./assets/mop.webp','./assets/broom-sticks.webp'];
-self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting())));
-self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(x=>x!==CACHE).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
-self.addEventListener('fetch',event=>{if(event.request.method!=='GET'||new URL(event.request.url).origin!==location.origin)return;event.respondWith(caches.match(event.request).then(found=>found||fetch(event.request).then(resp=>{if(resp.ok){const copy=resp.clone();caches.open(CACHE).then(c=>c.put(event.request,copy))}return resp})))})
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)).then(() => self.skipWaiting()));
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(key => key.startsWith('stock-control-') && key !== CACHE)
+      .map(key => caches.delete(key)));
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    if (request.mode === 'navigate') {
+      try {
+        const response = await fetch(request, {cache: 'no-cache'});
+        if (response.ok) return response;
+      } catch {
+        // Use the bundled shell when the network is unavailable.
+      }
+      return (await cache.match('./index.html')) || Response.error();
+    }
+    return (await cache.match(request)) || fetch(request);
+  })());
+});

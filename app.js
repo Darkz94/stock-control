@@ -462,7 +462,7 @@ document.querySelector('#backup-import').addEventListener('change',async e=>{con
  if(!confirm('Restore this backup? It will replace all tickets, stock counts and history on this device.'))return;data=imported;if(!(await save()))return;navigate('dashboard');notify('Backup successfully restored.');}catch(err){notify('This is not a valid Stock Control backup.',true)}finally{e.target.value=''}});
 document.querySelector('#menu-toggle').addEventListener('click',()=>document.querySelector('#sidebar').classList.toggle('open'));
 document.querySelector('#today-date').textContent=new Date().toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'long',year:'numeric'});
-if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('Offline mode unavailable',e));
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).catch(e=>console.warn('Offline mode unavailable',e));
 function showSignIn(message = '') {
   accessRole = null;
   data = initial();

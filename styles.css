@@ -8,9 +8,8 @@
 
 /* Keep each catalogue photo square so the crop matches the source artwork. */
 .product-image img {
-  width: auto;
-  max-width: 100%;
-  height: calc(100% - 18px);
+  width: min(100%, 160px);
+  height: auto;
   padding: 0;
   aspect-ratio: 1;
 }
@@ -26,3 +25,5 @@ img[src="./assets/rake.webp"] {
   clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 73%, 28% 73%, 28% 42%, 0 42%);
 }
 img[src="./assets/mop.webp"] { clip-path: inset(0 0 0 20%); }
+
+@media (max-width: 620px) { .product-image img { width: min(100%, 120px); } }
