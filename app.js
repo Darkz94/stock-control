@@ -122,6 +122,9 @@ function orders(){
   <textarea id="quick-paste-message" rows="5" placeholder="2 x Pine Gel 5L&#10;4 x Two-Stroke Oil 500ml&#10;3 x Black Bags" aria-describedby="quick-paste-help"></textarea>
   <small id="quick-paste-help">If your phone inserts text without triggering a Paste event, use the backup button below.</small></div>
   ${btn('Save typed text as ticket','quick-capture','dark')}
+  ${btn('Upload screenshot','order-screenshot','')}
+  <input type="file" id="order-screenshot" accept="image/png,image/jpeg,image/webp" hidden>
+  <p id="screenshot-status" class="small-muted" role="status">Select a screenshot from your gallery, or paste an image into the order box.</p>
  </section>
  <div class="filters">${['All','review','new','preparing','ready','collected','cancelled'].map(st=>`<button data-action="ticket-filter" data-status="${st}" class="filter ${ui.ticketFilter===st?'active':''}">${st==='All'?'All tickets':STATUSES[st]} (${st==='All'?data.tickets.length:data.tickets.filter(t=>t.status===st).length})</button>`).join('')}</div>
  <section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Ticket</th><th>Manager / site</th><th>Items</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>${tks.map(t=>`<tr><td><strong>${esc(t.id)}</strong></td><td><strong>${esc(t.manager)}</strong><span class="small-muted">${esc(t.site||'No site supplied')}</span></td><td>${t.lines.length} products</td><td>${esc(dateFmt(t.createdAt))}</td><td>${statusBadge(t.status)}</td><td><button class="btn tiny" data-action="ticket-detail" data-id="${esc(t.id)}">View ›</button></td></tr>`).join('')}</tbody></table></div>${!tks.length?'<div class="empty-state">No tickets in this category.</div>':''}</section>`;
@@ -175,19 +178,92 @@ function capturedManager(raw){
  const header=msg.match(/^\s*\[[^\]]+\]\s*([^:\n]{2,70})\s*:/);
  return (named?.[1]||header?.[1]||'').trim().slice(0,100);
 }
-async function capturePastedOrder(raw){
+function screenshotManager(raw) {
+ const explicit = capturedManager(raw);
+ if (explicit && /\p{L}/u.test(explicit)) return explicit;
+ const lines = raw.split('\n').map(line => line.trim()).filter(Boolean);
+ const firstItem = lines.findIndex(line => parseWhatsApp(line).lines.length);
+ if (firstItem < 0) return '';
+ for (const line of lines.slice(0, Math.min(firstItem, 5))) {
+  const candidate = line.replace(/^[‹←<❮]+\s*/, '').trim();
+  if (/^(?:whatsapp|today|yesterday|online|last seen|tap here|typing|message|good morning|good afternoon|hello|hi|please|order|stock request|you|unread)\b/i.test(candidate)) continue;
+  if (/^\p{L}[\p{L}\p{M}'’.-]*(?:\s+\p{L}[\p{L}\p{M}'’.-]*){0,4}$/u.test(candidate) && candidate.length <= 75) return candidate;
+ }
+ return '';
+}
+
+let screenshotBusy = false;
+let ocrScript;
+function loadScreenshotReader() {
+ if (!ocrScript) {
+  ocrScript = new Promise((resolve, reject) => {
+   const script = document.createElement('script');
+   script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';
+   script.integrity = 'sha384-r1ru3tcf6FhnCFR4B7pIFG+BhFF9LlFtz/P1y4pblWn3AGs9y3lBx5SKLNf4+rED';
+   script.crossOrigin = 'anonymous';
+   script.onload = () => resolve(window.Tesseract);
+   script.onerror = () => { script.remove(); reject(new Error('Screenshot reader unavailable')); };
+   document.head.appendChild(script);
+  }).catch(error => { ocrScript = undefined; throw error; });
+ }
+ return ocrScript;
+}
+
+async function captureOrderScreenshot(file) {
+ const status = document.querySelector('#screenshot-status');
+ if (!status || screenshotBusy || saving) return;
+ if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 12 * 1024 * 1024) {
+  status.textContent = 'Choose a PNG, JPEG or WebP screenshot up to 12 MB.';
+  return;
+ }
+ screenshotBusy = true;
+ status.textContent = 'Reading screenshot…';
+ let worker;
+ try {
+  const reader = await loadScreenshotReader();
+  worker = await reader.createWorker('eng', 1, {
+   workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/worker.min.js',
+   corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@6.0.0',
+   langPath: 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int'
+  });
+  const result = await worker.recognize(file);
+  if (document.querySelector('#screenshot-status') !== status) return;
+  const raw = result.data.text.trim();
+  if (!raw) {
+   status.textContent = 'No text found. Try a clearer screenshot or paste the WhatsApp text.';
+   return;
+  }
+  if (raw.length > 6000) {
+   status.textContent = 'Use a screenshot showing just this order.';
+   return;
+  }
+  status.textContent = 'Saving ticket for review…';
+  await capturePastedOrder(raw, 'whatsapp-screenshot');
+  if (document.querySelector('#screenshot-status') === status) status.textContent = 'Check the ticket list before retrying.';
+ } catch {
+  if (document.querySelector('#screenshot-status') === status) status.textContent = 'Could not read the screenshot. Try again or paste the order text.';
+ } finally {
+  screenshotBusy = false;
+  if (worker) await worker.terminate().catch(() => {});
+ }
+}
+
+async function capturePastedOrder(raw, source='manual-whatsapp-paste'){
  const message=String(raw||'').trim();
  if(!message){notify('Paste a WhatsApp order first.',true);return}
  if(message.length>6000){notify('This message is too long. Copy just the order.',true);return}
  const managerInput=document.querySelector('#quick-manager'),phoneInput=document.querySelector('#quick-phone'),siteInput=document.querySelector('#quick-site');
- const manager=(managerInput?.value||'').trim()||capturedManager(message);
- const phone=(phoneInput?.value||'').trim(),site=(siteInput?.value||'').trim();
- ui.captureMeta={manager:managerInput?.value||'',phone,site};
- const duplicate=data.tickets.find(t=>t.source==='manual-whatsapp-paste'&&t.rawMessage===message&&t.manager===(manager||'Manager not specified')&&t.site===site&&Date.now()-Date.parse(t.createdAt)<60000);
+ const manager=source==='whatsapp-screenshot'?screenshotManager(message):(managerInput?.value||'').trim()||capturedManager(message);
+ const phone=source==='whatsapp-screenshot'?'':(phoneInput?.value||'').trim(),site=source==='whatsapp-screenshot'?'':(siteInput?.value||'').trim();
+ if(source==='manual-whatsapp-paste')ui.captureMeta={manager:managerInput?.value||'',phone,site};
+ const duplicate=data.tickets.find(t=>t.source===source&&t.rawMessage===message&&t.manager===(manager||'Manager not specified')&&t.site===site&&Date.now()-Date.parse(t.createdAt)<60000);
  if(duplicate){navigate('orders');ticketDetails(duplicate.id);notify('This message was recently captured. Opened the existing ticket.');return}
- const parsed=parseWhatsApp(message),timestamp=new Date().toISOString();
+ const orderText=source==='whatsapp-screenshot'&&manager
+  ? message.split('\n').filter(line=>line.trim().replace(/^[‹←<❮]+\s*/, '')!==manager).join('\n')
+  : message;
+ const parsed=parseWhatsApp(orderText),timestamp=new Date().toISOString();
  const ticketId=`SC-${timestamp.slice(0,10).replace(/-/g,'')}-${String(data.nextTicket++).padStart(4,'0')}`;
- const t={id:ticketId,manager:manager||'Manager not specified',phone,site,rawMessage:message,notes:'',lines:parsed.lines,reviewLines:parsed.unmatched,status:'review',source:'manual-whatsapp-paste',createdAt:timestamp,updatedAt:timestamp};
+ const t={id:ticketId,manager:manager||'Manager not specified',phone,site,rawMessage:message,notes:'',lines:parsed.lines,reviewLines:parsed.unmatched,status:'review',source,createdAt:timestamp,updatedAt:timestamp};
  data.tickets.unshift(t);if(!(await save()))return;ui.ticketFilter='All';navigate('orders');ticketDetails(t.id);
  notify(`Ticket ${ticketId} created instantly — check ${parsed.lines.length} matched product(s).`);
 }
@@ -275,6 +351,7 @@ document.addEventListener('click',e=>{
  switch(a){case 'close-modal':closeModal();break;case 'new-order':newOrder();break;case 'stock-receive':openStock();break;case 'adjust-stock':openStock(id,'adjust');break;
  case 'category':ui.category=b.dataset.category;render();break;case 'ticket-filter':ui.ticketFilter=b.dataset.status;render();break;case 'ticket-detail':ticketDetails(id);break;
  case 'new-transfer':transferDialog(b.dataset.source);break;
+ case 'order-screenshot':document.querySelector('#order-screenshot')?.click();break;
  case 'quick-capture':capturePastedOrder(document.querySelector('#quick-paste-message')?.value||'');break;
  case 'review-ticket':reviewTicket(id);break;
  case 'parse-order':{const val=document.querySelector('#order-message').value;const parsed=parseWhatsApp(val);if(parsed.lines.length){ui.draftLines=parsed.lines;redrawLines()}ui.unmatched=parsed.unmatched;document.querySelector('#unmatched-lines').innerHTML=parsed.unmatched.length?`<div class="notice warning"><strong>Could not match these lines</strong>${parsed.unmatched.map(esc).join('<br>')}<br>Please add/check the items manually.</div>`:'';notify(`${parsed.lines.length} product types identified. Review before saving.`);break}
@@ -289,9 +366,10 @@ document.addEventListener('click',e=>{
  case 'import-backup':document.querySelector('#backup-import').click();break;
  }
 });
-document.addEventListener('paste',e=>{if(e.target.id!=='quick-paste-message')return;const raw=e.clipboardData?.getData('text/plain');if(!raw?.trim())return;e.preventDefault();e.target.value=raw;capturePastedOrder(raw);});
+document.addEventListener('paste',e=>{if(e.target.id!=='quick-paste-message')return;const image=[...(e.clipboardData?.files||[])].find(file=>file.type.startsWith('image/'));if(image){e.preventDefault();captureOrderScreenshot(image);return}const raw=e.clipboardData?.getData('text/plain');if(!raw?.trim())return;e.preventDefault();e.target.value=raw;capturePastedOrder(raw);});
 document.addEventListener('input',e=>{if(e.target.id==='quick-paste-message'&&e.inputType==='insertFromPaste'&&e.target.value.trim()){capturePastedOrder(e.target.value);return}if(e.target.id==='inventory-search'){const start=e.target.selectionStart;ui.search=e.target.value;render();let input=document.querySelector('#inventory-search');input.focus();input.setSelectionRange(start,start)}});
 document.addEventListener('change',e=>{
+ if(e.target.id==='order-screenshot'){const file=e.target.files?.[0];e.target.value='';if(file)captureOrderScreenshot(file);return}
  if(e.target.id==='stock-product'){let p=product(e.target.value);document.querySelector('#stock-current').textContent=`${qty(p.id)} ${p.unit}`;}
  if(e.target.id==='transfer-type'){let c=CONVERSIONS.find(x=>x.source===e.target.value);document.querySelector('#transfer-preview').textContent=`${qty(c.source)} available · 1 large container becomes ${c.ratio} smaller containers`;}
 });
