@@ -83,7 +83,7 @@ begin
   if stock_changes is null or jsonb_typeof(stock_changes) <> 'array' or jsonb_array_length(stock_changes) > 16 then
     raise exception 'Invalid stock movements';
   end if;
-  select * into strict shared from stock_private.state for update;
+  select * into strict shared from stock_private.state where singleton = true for update;
   if expected_version is distinct from shared.version then
     raise exception 'Stock Control changed on another device. Refresh and retry.' using errcode = '40001';
   end if;
@@ -107,7 +107,8 @@ begin
       values (auth.uid(), access_role, item_id, delta, movement_kind, movement_reason, ticket);
   end loop;
   update stock_private.state set counts = shared.counts, version = shared.version + 1,
-    orders = coalesce(order_data, shared.orders), settings = coalesce(preferences, shared.settings);
+    orders = coalesce(order_data, shared.orders), settings = coalesce(preferences, shared.settings)
+  where singleton = true;
   return shared.version + 1;
 end;
 $$;
