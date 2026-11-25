@@ -1,5 +1,5 @@
-const CACHE='stock-control-v1-20261105-instant-paste';
-const FILES=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./icon.svg',
+const CACHE='stock-control-v2-shared';
+const FILES=['./','./index.html','./styles.css','./app.js','./cloud.js','./manifest.webmanifest','./icon.svg',
 './assets/two-stroke-500ml.webp','./assets/two-stroke-20l.webp','./assets/nylon-line.webp',
 './assets/pine-gel-5l.webp','./assets/pine-gel-20l.webp','./assets/non-selective-20l.webp',
 './assets/non-selective-1l.webp','./assets/selective-20l.webp','./assets/selective-5l.webp',

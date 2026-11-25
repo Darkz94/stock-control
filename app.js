@@ -1,5 +1,5 @@
 'use strict';
-/* Stock Control v1: client-side, single-device prototype. Never put API keys or real customer data in this repository. */
+/* Stock Control. Only publishable credentials belong in the browser. */
 const PRODUCTS = [
   {id:'two-stroke-500ml',name:'Two-stroke oil',size:'500 ml bottle',group:'Chemicals & liquids',unit:'bottles',img:'two-stroke-500ml.webp',keywords:['two stroke oil 500 ml','two-stroke oil 500 ml','two stroke 500','two-stroke 500','2 stroke 500','2t oil 500']},
   {id:'two-stroke-20l',name:'Two-stroke oil',size:'20 L bucket',group:'Chemicals & liquids',unit:'buckets',img:'two-stroke-20l.webp',keywords:['two stroke oil 20 l','two-stroke oil 20 l','two stroke 20','two-stroke 20','2 stroke 20','2t oil 20']},
@@ -27,8 +27,10 @@ const CONVERSIONS=[
 const STATUSES={review:'Needs review',new:'New request',preparing:'Preparing',ready:'Ready to collect',collected:'Collected',cancelled:'Cancelled'};
 const KEY='stock_control_local_v1';
 const initial=()=>({schema:1,counts:Object.fromEntries(PRODUCTS.map(p=>[p.id,0])),tickets:[],movements:[],nextTicket:1,settings:{company:'Stock Control',businessWhatsApp:'',lowThreshold:2}});
+const cloud = window.stockCloud;
+let sharedVersion, accessRole, saving = false;
 let data;
-try{const saved=JSON.parse(localStorage.getItem(KEY)||'null');data=validateData(saved)?saved:initial();}catch(_){data=initial()}
+try{const saved=cloud?null:JSON.parse(localStorage.getItem(KEY)||'null');data=validateData(saved)?saved:initial();}catch(_){data=initial()}
 const ui={view:'dashboard',category:'All products',search:'',ticketFilter:'All',detail:null,draftLines:[],unmatched:[],captureMeta:{manager:'',phone:'',site:''}};
 const product=id=>PRODUCTS.find(p=>p.id===id);
 const img=id=>'./assets/'+product(id).img;
@@ -40,7 +42,53 @@ const statusBadge=s=>`<span class="pill ${esc(s)}">${esc(STATUSES[s]||s)}</span>
 const title=(eyebrow,heading,description,buttons='')=>`<div class="page-title"><div><p class="eyebrow">${esc(eyebrow)}</p><h1>${esc(heading)}</h1><p class="subtitle">${esc(description)}</p></div><div class="actions">${buttons}</div></div>`;
 const btn=(text,action,style='primary',extra='')=>`<button type="button" class="btn ${style}" data-action="${esc(action)}" ${extra}>${text}</button>`;
 function validateData(v){return !!(v&&v.schema===1&&v.counts&&typeof v.counts==='object'&&Array.isArray(v.tickets)&&Array.isArray(v.movements)&&v.settings&&Number.isSafeInteger(v.nextTicket))}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){notify('Could not save. Export a backup and free browser space.',true);console.error(e)}}
+function applySharedState(shared) {
+  sharedVersion = shared.version;
+  accessRole = shared.role;
+  data = {
+    ...initial(),
+    ...shared.orders,
+    counts: shared.counts,
+    movements: shared.movements,
+    settings: {...initial().settings, ...shared.settings}
+  };
+}
+
+async function save() {
+  if (!cloud) {
+    try { localStorage.setItem(KEY, JSON.stringify(data)); return true; }
+    catch { notify('Could not save on this device.', true); return false; }
+  }
+  if (saving || !accessRole) return false;
+  saving = true;
+  const shell = document.querySelector('#app-shell');
+  const dialog = document.querySelector('#modal-host');
+  shell.inert = dialog.inert = true;
+  const changes = data.movements.filter(movement => typeof movement.id === 'string').reverse();
+  let committed = false;
+  try {
+    sharedVersion = await cloud.write({
+      expected_version: sharedVersion,
+      stock_changes: changes,
+      order_data: accessRole === 'owner' ? {tickets: data.tickets, nextTicket: data.nextTicket} : null,
+      preferences: accessRole === 'owner' ? data.settings : null
+    });
+    committed = true;
+    applySharedState(await cloud.read());
+    return true;
+  } catch (error) {
+    try { applySharedState(await cloud.read()); }
+    catch {
+      showSignIn('Connection lost. Sign in to reload the latest stock.');
+      return false;
+    }
+    render();
+    notify(committed ? 'Saved. Reloaded the latest stock records.' : 'Save could not be confirmed. Check the latest records before retrying. ' + error.message, !committed);
+    return committed;
+  } finally {
+    saving = shell.inert = dialog.inert = false;
+  }
+}
 function notify(message,error=false){const host=document.querySelector('#toast-host');host.innerHTML=`<div class="toast ${error?'error':''}">${esc(message)}</div>`;window.clearTimeout(notify._timer);notify._timer=setTimeout(()=>host.innerHTML='',3900)}
 function move(id,change,kind,reason,ticketId=null){data.counts[id]=qty(id)+change;data.movements.unshift({id:crypto.randomUUID?.()||String(Date.now()+Math.random()),at:new Date().toISOString(),productId:id,change,kind,reason:String(reason||''),ticketId});}
 function dashboard(){
@@ -82,12 +130,12 @@ function orders(){
 function transfers(){return title('PACK SIZE CONVERSIONS','Stock conversions','Record stock moving from larger containers into smaller product sizes.',btn('⇄ Record conversion','new-transfer'))+
  `<div class="notice warning"><strong>Important safety note</strong>This screen records inventory conversions; it is not a procedure for physically handling or repackaging chemicals. Follow product labels, applicable safety procedures and required container labelling.</div><div style="height:18px"></div><div class="product-grid">${CONVERSIONS.map(c=>{let a=product(c.source),b=product(c.target);return `<section class="panel" style="padding:14px"><div style="display:flex;align-items:center;gap:8px"><img src="${esc(img(a.id))}" alt="" style="width:38%;max-height:100px;object-fit:contain" /><span style="font-size:23px;color:var(--accent)">→</span><img src="${esc(img(b.id))}" alt="" style="width:38%;max-height:100px;object-fit:contain" /></div><strong style="font-size:13px">${esc(a.name)}</strong><p class="small-muted">1 × ${esc(a.size)} = ${c.ratio} × ${esc(b.size)}</p><p class="small-muted">Available bulk: ${qty(a.id)} · Small: ${qty(b.id)}</p><button class="btn tiny" data-action="new-transfer" data-source="${esc(a.id)}" style="margin-top:13px">Convert stock</button></section>`}).join('')}</div>`}
 function activity(){return title('AUDIT TRAIL','Stock movement history','Every received, adjusted, converted and collected item is recorded.',btn('↓ Export history CSV','export-history',''))+
- `<section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Product</th><th>Movement</th><th>Reason / ticket</th></tr></thead><tbody>${data.movements.map(m=>`<tr><td>${esc(dateFmt(m.at))}</td><td><strong>${esc(product(m.productId)?.name||m.productId)}</strong><span class="small-muted">${esc(product(m.productId)?.size||'')}</span></td><td><span class="activity-badge ${m.change<0?'out':''}">${m.change>0?'+':''}${esc(m.change)} ${esc(product(m.productId)?.unit||'')}</span></td><td>${esc(m.reason)}${m.ticketId?`<span class="small-muted">${esc(m.ticketId)}</span>`:''}</td></tr>`).join('')}</tbody></table></div>${!data.movements.length?'<div class="empty-state">No stock movements recorded yet.</div>':''}</section>`}
+ `<section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Product</th><th>Movement</th><th>Reason / ticket</th></tr></thead><tbody>${data.movements.map(m=>`<tr><td>${esc(dateFmt(m.at))}</td><td><strong>${esc(product(m.productId)?.name||m.productId)}</strong><span class="small-muted">${esc(product(m.productId)?.size||'')}</span></td><td><span class="activity-badge ${m.change<0?'out':''}">${m.change>0?'+':''}${esc(m.change)} ${esc(product(m.productId)?.unit||'')}</span></td><td>${esc(m.reason+(m.actor?' · '+(m.actor==='owner'?'Order operator':'Stock editor'):''))}${m.ticketId?`<span class="small-muted">${esc(m.ticketId)}</span>`:''}</td></tr>`).join('')}</tbody></table></div>${!data.movements.length?'<div class="empty-state">No stock movements recorded yet.</div>':''}</section>`}
 function settings(){return title('PREFERENCES & DATA','Settings & backups','Use your normal WhatsApp number and safeguard your local records.')+
  `<div class="settings-grid"><section class="panel"><div class="panel-heading"><h2>Business details</h2></div><form id="settings-form"><div class="field"><label for="company">Business / department name</label><input id="company" value="${esc(data.settings.company)}" maxlength="90" required /></div><div class="field"><label for="business-number">My regular WhatsApp number (optional)</label><input id="business-number" value="${esc(data.settings.businessWhatsApp)}" placeholder="e.g. +27 82 123 4567" inputmode="tel" /><small>Used only to open a prefilled WhatsApp chat for your own ticket copy; no Business account or API is needed. You must tap Send manually.</small></div><div class="field"><label for="low-threshold">Low stock alert at or below</label><input id="low-threshold" type="number" min="0" max="99999" step="1" value="${data.settings.lowThreshold}" required /></div><button class="btn primary" type="submit">Save settings</button></form></section>
  <section class="panel"><div class="panel-heading"><h2>Backup & reporting</h2></div><p class="subtitle">Because this version saves to one browser, a downloaded backup is essential. Importing a backup replaces all local records.</p><div class="layout-stack" style="margin-top:22px">${btn('↓ Download full JSON backup','export-backup','dark')}${btn('↑ Restore a JSON backup','import-backup','')}${btn('↓ Export ticket CSV','export-orders','')}${btn('↓ Export stock CSV','export-stock','')}</div></section></div><div style="height:18px"></div><div class="notice warning"><strong>Before daily business use</strong>This public prototype has no staff sign-in or secure shared database. Ordinary WhatsApp cannot automatically import orders or send replies. The WhatsApp buttons only prepare messages for a person to check and send. Make the production app private and add authentication and server-side permissions before storing real manager phone numbers or deploying to a team.</div>`}
 function render(){document.querySelector('#app-main').innerHTML=({dashboard,inventory,orders,transfers,activity,settings}[ui.view]||dashboard)();document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===ui.view));document.querySelector('#crumb-current').textContent={dashboard:'Overview',inventory:'Inventory',orders:'Order tickets',transfers:'Stock conversions',activity:'Stock history',settings:'Settings & backups'}[ui.view];document.querySelector('#ticket-pill').textContent=data.tickets.filter(t=>['review','new','preparing','ready'].includes(t.status)).length||'';}
-function navigate(view){ui.view=view;document.querySelector('#sidebar').classList.remove('open');render();window.scrollTo(0,0);}
+function navigate(view){if(accessRole==='stock'&&!['inventory','activity'].includes(view))return;ui.view=view;document.querySelector('#sidebar').classList.remove('open');render();window.scrollTo(0,0);}
 function modal(body,heading,wide=false){document.querySelector('#modal-host').innerHTML=`<div class="modal-shade" role="dialog" aria-modal="true" aria-label="${esc(heading)}"><div class="modal ${wide?'wide':''}"><div class="modal-title"><h2>${esc(heading)}</h2><button class="close-btn" data-action="close-modal" aria-label="Close">×</button></div>${body}</div></div>`;}
 function closeModal(){document.querySelector('#modal-host').innerHTML='';ui.draftLines=[];ui.unmatched=[];}
 function options(selected=''){return PRODUCTS.map(p=>`<option value="${esc(p.id)}" ${p.id===selected?'selected':''}>${esc(formatLabel(p))}</option>`).join('')}
@@ -127,7 +175,7 @@ function capturedManager(raw){
  const header=msg.match(/^\s*\[[^\]]+\]\s*([^:\n]{2,70})\s*:/);
  return (named?.[1]||header?.[1]||'').trim().slice(0,100);
 }
-function capturePastedOrder(raw){
+async function capturePastedOrder(raw){
  const message=String(raw||'').trim();
  if(!message){notify('Paste a WhatsApp order first.',true);return}
  if(message.length>6000){notify('This message is too long. Copy just the order.',true);return}
@@ -140,7 +188,7 @@ function capturePastedOrder(raw){
  const parsed=parseWhatsApp(message),timestamp=new Date().toISOString();
  const ticketId=`SC-${timestamp.slice(0,10).replace(/-/g,'')}-${String(data.nextTicket++).padStart(4,'0')}`;
  const t={id:ticketId,manager:manager||'Manager not specified',phone,site,rawMessage:message,notes:'',lines:parsed.lines,reviewLines:parsed.unmatched,status:'review',source:'manual-whatsapp-paste',createdAt:timestamp,updatedAt:timestamp};
- data.tickets.unshift(t);save();ui.ticketFilter='All';navigate('orders');ticketDetails(t.id);
+ data.tickets.unshift(t);if(!(await save()))return;ui.ticketFilter='All';navigate('orders');ticketDetails(t.id);
  notify(`Ticket ${ticketId} created instantly — check ${parsed.lines.length} matched product(s).`);
 }
 
@@ -200,14 +248,14 @@ function whatsappMessage(t,kind){const name=data.settings.company||'Stock Contro
  if(kind==='ready')return `Hello ${t.manager}, your stock order is ready for collection.\nTicket: ${t.id}\n${orderSummary(t)}\nPlease arrange collection.\n— ${name}`;
  return `New stock order ticket ${t.id}\nManager: ${t.manager}\nSite: ${t.site||'Not specified'}\n${orderSummary(t)}\nStatus: ${STATUSES[t.status]}`;}
 function openWhatsApp(rawPhone,message){const phone=whatsappPhone(rawPhone);if(!phone){notify('Add a valid WhatsApp number in international format.',true);return}window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`,'_blank','noopener,noreferrer');notify('WhatsApp draft opened. Review and tap Send there.');}
-function changeStatus(id,status){const t=data.tickets.find(x=>x.id===id);if(!t)return;const allowed={review:['cancelled'],new:['preparing','ready','cancelled'],preparing:['ready','cancelled'],ready:['collected','cancelled'],collected:[],cancelled:[]};if(!allowed[t.status]?.includes(status)){notify('This status change is not allowed.',true);return}
+async function changeStatus(id,status){const t=data.tickets.find(x=>x.id===id);if(!t)return;const allowed={review:['cancelled'],new:['preparing','ready','cancelled'],preparing:['ready','cancelled'],ready:['collected','cancelled'],collected:[],cancelled:[]};if(!allowed[t.status]?.includes(status)){notify('This status change is not allowed.',true);return}
  if(['preparing','ready','collected'].includes(status)&&(t.manager==='Manager not specified'||!t.manager||!t.lines.length)){notify('Confirm the manager and order items first.',true);return}
  if(status==='collected'){
   const totals=new Map();for(const l of t.lines)totals.set(l.productId,(totals.get(l.productId)||0)+l.quantity);
   for(const [pid,q] of totals){if(qty(pid)<q){notify('Not enough stock to hand over '+product(pid).name,true);return}}
   for(const [pid,q] of totals)move(pid,-q,'Order collected',`Issued on ticket ${id}`,id);
  }
- t.status=status;t.updatedAt=new Date().toISOString();save();render();ticketDetails(id);
+ t.status=status;t.updatedAt=new Date().toISOString();if(!(await save()))return;render();ticketDetails(id);
  if(status==='ready'){notify("Ticket marked ready. Open the manager\'s normal WhatsApp draft and tap Send to notify them.");}
  else notify('Ticket updated to '+STATUSES[status]+'.');
 }
@@ -247,7 +295,7 @@ document.addEventListener('change',e=>{
  if(e.target.id==='stock-product'){let p=product(e.target.value);document.querySelector('#stock-current').textContent=`${qty(p.id)} ${p.unit}`;}
  if(e.target.id==='transfer-type'){let c=CONVERSIONS.find(x=>x.source===e.target.value);document.querySelector('#transfer-preview').textContent=`${qty(c.source)} available · 1 large container becomes ${c.ratio} smaller containers`;}
 });
-document.addEventListener('submit',e=>{
+document.addEventListener('submit',async e=>{
  if(!['stock-form','order-form','transfer-form','settings-form','review-ticket-form'].includes(e.target.id))return;e.preventDefault();const form=e.target.id;
  if(form==='review-ticket-form'){
   syncDraft();const id=document.querySelector('#review-ticket-id').value;const t=data.tickets.find(x=>x.id===id);
@@ -259,16 +307,72 @@ document.addEventListener('submit',e=>{
   const combined=new Map();for(const l of ui.draftLines)combined.set(l.productId,(combined.get(l.productId)||0)+l.quantity);
   if([...combined.values()].some(n=>n>9999)){notify('Total quantity per product cannot exceed 9999.',true);return}
   t.manager=manager;t.phone=phone;t.site=site;t.notes=notes;t.lines=[...combined].map(([productId,quantity])=>({productId,quantity}));t.reviewLines=[];t.reviewedAt=new Date().toISOString();t.updatedAt=t.reviewedAt;if(t.status==='review')t.status='new';
-  save();render();ticketDetails(id);notify('Ticket confirmed. You can now prepare the order.');return;
+  if(!(await save()))return;render();ticketDetails(id);notify('Ticket confirmed. You can now prepare the order.');return;
  }
- if(form==='settings-form'){const threshold=Number(document.querySelector('#low-threshold').value);if(!Number.isSafeInteger(threshold)||threshold<0){notify('Alert threshold must be a whole number.',true);return}data.settings={company:document.querySelector('#company').value.trim()||'Stock Control',businessWhatsApp:document.querySelector('#business-number').value.trim(),lowThreshold:threshold};save();render();notify('Settings saved on this device.');return}
- if(form==='stock-form'){const id=document.querySelector('#stock-product').value,mode=document.querySelector('#stock-operation').value,amount=Number(document.querySelector('#stock-quantity').value),reason=document.querySelector('#stock-reason').value.trim();if(!Number.isSafeInteger(amount)||amount<0||amount>1000000||!reason){notify('Enter a valid quantity and reason.',true);return}let change=mode==='in'?amount:mode==='out'?-amount:amount-qty(id);if(mode!=='count'&&amount===0){notify('Quantity must be greater than zero.',true);return}if(qty(id)+change<0){notify('Cannot remove more than is available.',true);return}move(id,change,mode==='count'?'Stock count':mode==='in'?'Received':'Written off',reason);save();closeModal();render();notify('Stock balance updated.');return}
- if(form==='transfer-form'){let c=CONVERSIONS.find(x=>x.source===document.querySelector('#transfer-type').value);const count=Number(document.querySelector('#transfer-count').value),reason=document.querySelector('#transfer-reason').value.trim();if(!c||!Number.isSafeInteger(count)||count<=0||count>100000||!reason){notify('Enter a valid whole-container count and reference.',true);return}if(qty(c.source)<count){notify('Not enough source containers are available.',true);return}move(c.source,-count,'Conversion out',reason);move(c.target,count*c.ratio,'Conversion in',reason);save();closeModal();render();notify(`${count} bulk container(s) converted into ${count*c.ratio} small units.`);return}
- if(form==='order-form'){syncDraft();const manager=document.querySelector('#order-manager').value.trim(),phone=document.querySelector('#order-phone').value.trim(),site=document.querySelector('#order-site').value.trim(),rawMessage=document.querySelector('#order-message').value.trim(),notes=document.querySelector('#order-notes').value.trim();if(!manager||!ui.draftLines.length||ui.draftLines.some(l=>!product(l.productId)||!Number.isSafeInteger(l.quantity)||l.quantity<1||l.quantity>9999)){notify('Enter a manager and one or more valid product quantities.',true);return}if(phone&&!whatsappPhone(phone)){notify('Use a valid WhatsApp number, or leave the field empty.',true);return}const combined=new Map();ui.draftLines.forEach(l=>combined.set(l.productId,(combined.get(l.productId)||0)+l.quantity));let lines=[...combined].map(([productId,quantity])=>({productId,quantity}));const ticketId=`SC-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(data.nextTicket++).padStart(4,'0')}`;data.tickets.unshift({id:ticketId,manager,phone,site,rawMessage,notes,lines,status:'new',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});save();closeModal();navigate('orders');ticketDetails(ticketId);notify(`Ticket ${ticketId} created. Open normal WhatsApp and tap Send to share ticket updates.`);return}
+ if(form==='settings-form'){const threshold=Number(document.querySelector('#low-threshold').value);if(!Number.isSafeInteger(threshold)||threshold<0){notify('Alert threshold must be a whole number.',true);return}data.settings={company:document.querySelector('#company').value.trim()||'Stock Control',businessWhatsApp:document.querySelector('#business-number').value.trim(),lowThreshold:threshold};if(!(await save()))return;render();notify('Settings saved.');return}
+ if(form==='stock-form'){const id=document.querySelector('#stock-product').value,mode=document.querySelector('#stock-operation').value,amount=Number(document.querySelector('#stock-quantity').value),reason=document.querySelector('#stock-reason').value.trim();if(!Number.isSafeInteger(amount)||amount<0||amount>1000000||!reason){notify('Enter a valid quantity and reason.',true);return}let change=mode==='in'?amount:mode==='out'?-amount:amount-qty(id);if(mode!=='count'&&amount===0){notify('Quantity must be greater than zero.',true);return}if(qty(id)+change<0){notify('Cannot remove more than is available.',true);return}move(id,change,mode==='count'?'Stock count':mode==='in'?'Received':'Written off',reason);if(!(await save()))return;closeModal();render();notify('Stock balance updated.');return}
+ if(form==='transfer-form'){let c=CONVERSIONS.find(x=>x.source===document.querySelector('#transfer-type').value);const count=Number(document.querySelector('#transfer-count').value),reason=document.querySelector('#transfer-reason').value.trim();if(!c||!Number.isSafeInteger(count)||count<=0||count>100000||!reason){notify('Enter a valid whole-container count and reference.',true);return}if(qty(c.source)<count){notify('Not enough source containers are available.',true);return}move(c.source,-count,'Conversion out',reason);move(c.target,count*c.ratio,'Conversion in',reason);if(!(await save()))return;closeModal();render();notify(`${count} bulk container(s) converted into ${count*c.ratio} small units.`);return}
+ if(form==='order-form'){syncDraft();const manager=document.querySelector('#order-manager').value.trim(),phone=document.querySelector('#order-phone').value.trim(),site=document.querySelector('#order-site').value.trim(),rawMessage=document.querySelector('#order-message').value.trim(),notes=document.querySelector('#order-notes').value.trim();if(!manager||!ui.draftLines.length||ui.draftLines.some(l=>!product(l.productId)||!Number.isSafeInteger(l.quantity)||l.quantity<1||l.quantity>9999)){notify('Enter a manager and one or more valid product quantities.',true);return}if(phone&&!whatsappPhone(phone)){notify('Use a valid WhatsApp number, or leave the field empty.',true);return}const combined=new Map();ui.draftLines.forEach(l=>combined.set(l.productId,(combined.get(l.productId)||0)+l.quantity));let lines=[...combined].map(([productId,quantity])=>({productId,quantity}));const ticketId=`SC-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(data.nextTicket++).padStart(4,'0')}`;data.tickets.unshift({id:ticketId,manager,phone,site,rawMessage,notes,lines,status:'new',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});if(!(await save()))return;closeModal();navigate('orders');ticketDetails(ticketId);notify(`Ticket ${ticketId} created. Open normal WhatsApp and tap Send to share ticket updates.`);return}
 });
-document.querySelector('#backup-import').addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;try{const imported=JSON.parse(await f.text());if(!validateData(imported)||PRODUCTS.some(p=>!Number.isSafeInteger(imported.counts[p.id])||imported.counts[p.id]<0)||imported.tickets.some(t=>!Array.isArray(t.lines)||t.lines.some(l=>!product(l.productId)||!Number.isSafeInteger(l.quantity)||l.quantity<1))){throw Error('Invalid backup schema')}
- if(!confirm('Restore this backup? It will replace all tickets, stock counts and history on this device.'))return;data=imported;save();navigate('dashboard');notify('Backup successfully restored.');}catch(err){notify('This is not a valid Stock Control backup.',true)}finally{e.target.value=''}});
+document.querySelector('#backup-import').addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;if(cloud){e.target.value='';notify('Shared stock backups require a reviewed import.',true);return;}try{const imported=JSON.parse(await f.text());if(!validateData(imported)||PRODUCTS.some(p=>!Number.isSafeInteger(imported.counts[p.id])||imported.counts[p.id]<0)||imported.tickets.some(t=>!Array.isArray(t.lines)||t.lines.some(l=>!product(l.productId)||!Number.isSafeInteger(l.quantity)||l.quantity<1))){throw Error('Invalid backup schema')}
+ if(!confirm('Restore this backup? It will replace all tickets, stock counts and history on this device.'))return;data=imported;if(!(await save()))return;navigate('dashboard');notify('Backup successfully restored.');}catch(err){notify('This is not a valid Stock Control backup.',true)}finally{e.target.value=''}});
 document.querySelector('#menu-toggle').addEventListener('click',()=>document.querySelector('#sidebar').classList.toggle('open'));
 document.querySelector('#today-date').textContent=new Date().toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'long',year:'numeric'});
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('Offline mode unavailable',e));
-render();
+function showSignIn(message = '') {
+  accessRole = null;
+  data = initial();
+  closeModal();
+  document.querySelector('#app-shell').style.display = 'none';
+  const host = document.querySelector('#sign-in');
+  host.hidden = false;
+  host.innerHTML = `<h1>Stock Control</h1>
+    <form id="sign-in-form">
+      <div class="field"><label for="sign-in-email">Email</label><input id="sign-in-email" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="sign-in-password">Password</label><input id="sign-in-password" type="password" autocomplete="current-password" required></div>
+      <p id="sign-in-message" role="status">${esc(message)}</p>
+      <button class="btn primary" type="submit">Sign in</button>
+    </form>`;
+  host.querySelector('form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = host.querySelector('button');
+    button.disabled = true;
+    try {
+      await cloud.signIn(host.querySelector('#sign-in-email').value.trim(), host.querySelector('#sign-in-password').value);
+      await openWorkspace();
+    } catch (error) {
+      host.querySelector('#sign-in-message').textContent = error.message;
+    } finally { button.disabled = false; }
+  });
+}
+
+async function openWorkspace() {
+  applySharedState(await cloud.read());
+  ui.view = accessRole === 'stock' ? 'inventory' : 'dashboard';
+  for (const button of document.querySelectorAll('[data-view]')) {
+    button.style.display = accessRole === 'stock' && !['inventory','activity'].includes(button.dataset.view) ? 'none' : '';
+  }
+  document.querySelector('.tools-label').style.display = accessRole === 'stock' ? 'none' : '';
+  document.querySelector('#sign-in').hidden = true;
+  document.querySelector('#app-shell').style.display = '';
+  render();
+}
+
+if (cloud) {
+  document.querySelector('#sign-out').addEventListener('click', async () => {
+    if (saving) return;
+    try { await cloud.signOut(); } finally { showSignIn(); }
+  });
+  document.querySelector('#refresh-stock').addEventListener('click', async event => {
+    if (saving) return;
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const shared = await cloud.read();
+      if (!saving && accessRole && shared.version >= sharedVersion) { applySharedState(shared); render(); }
+    } catch (error) { notify(error.message, true); }
+    finally { button.disabled = false; }
+  });
+  if (cloud.restore()) openWorkspace().catch(error => showSignIn(error.message));
+  else showSignIn();
+} else render();

@@ -1,6 +1,6 @@
 # Stock Control — Operations Desk
 
-A mobile-first, installable web-app prototype for cleaning and grounds-maintenance stock, manager requests, ticket tracking, and WhatsApp-assisted communication.
+A mobile-first, installable web app for cleaning and grounds-maintenance stock, manager requests, ticket tracking, and WhatsApp-assisted communication.
 
 ## Product catalogue
 
@@ -17,7 +17,7 @@ The app includes 16 independently tracked pack sizes: two-stroke oil (500 ml and
 - Statuses: **New → Preparing → Ready to collect → Collected**, with cancellations for active tickets.
 - Stock deducted **when marked Collected**, not merely when an order is prepared. Prevents deductions that would make stock negative.
 - **Normal WhatsApp Messenger** click-to-chat drafts for manager acknowledgement, ready-to-collect notification, and an optional personal WhatsApp ticket copy. A person checks the recipient and manually taps Send. No WhatsApp Business Platform or WhatsApp Business app is needed.
-- Ticket printing, CSV exports, JSON backup/import, optional personal WhatsApp number, installable/offline PWA.
+- Ticket printing, CSV exports, JSON backup/import, optional personal WhatsApp number and installable PWA. Shared records require an internet connection.
 
 ## Try it
 
@@ -27,7 +27,7 @@ No build dependencies. Run a local HTTP server in the project folder:
 python3 -m http.server 8080
 ```
 
-Open `http://localhost:8080` in a browser. On Android, host on HTTPS and use the browser's **Add to Home screen / Install app** feature. `index.html` may also open directly as a file in some desktop browsers, but service-worker offline caching requires HTTP(S).
+Open `http://localhost:8080` in a browser and sign in with an approved Stock Control account. On Android, host on HTTPS and use the browser's **Add to Home screen / Install app** feature. `index.html` may also open directly as a file in some desktop browsers, but service-worker offline caching requires HTTP(S).
 
 ### Example pasted request
 
@@ -39,11 +39,15 @@ Open `http://localhost:8080` in a browser. On Android, host on HTTPS and use the
 
 Review the detected products and quantities carefully; the parser is not AI and cannot interpret every message. Any unrecognised lines are flagged for manual checking.
 
-## Important prototype limits
+## Private shared access
 
-**This is NOT yet a shared production stock-control system.** Storage uses `localStorage` on each browser/device. One device cannot see other devices' live changes. The initial quantity for every product is zero. There is no staff authentication, access control, shared server database, WhatsApp chat access, automatic messaging or cloud backup. Opening WhatsApp drafts is **not** equivalent to sending a message. The production app must not publish actual phone numbers, private stock details or manager information in a public repository.
+Stock Control uses Supabase email/password sign-in. The approved order operator can process tickets and adjust stock. The approved stock editor can view balances and stock history, receive stock, record write-offs and enter a stocktake count. Both accounts use the same database. Stock history records the actor and server timestamp. Use **Refresh** to check changes from the other account. When a save conflicts with another device, review the latest balance before retrying.
 
-To upgrade to a team app, implement a secure backend (e.g. Firebase Authentication + Firestore), restrict access by verified staff/manager roles with security rules, move stock changes to atomic server transactions and implement audit trails. Keep ordinary WhatsApp manual: use share/click-to-chat links, with no automatic receiving or sending. If managers need automatic ticket creation without copying WhatsApp messages, provide an authenticated **in-app order form** backed by Firebase. See [Normal WhatsApp workflow](docs/WHATSAPP_INTEGRATION.md).
+Create and confirm the two approved users in **Authentication → Users** in the Supabase dashboard before signing in. The database checks the confirmed identity against a private allowlist. App access does not require membership in the Supabase organisation. The app has no public sign-up form. In the Supabase Auth settings, disable new public sign-ups before taking the app live.
+
+The previous prototype's browser records are left on their original device. Export a backup from that version if you need to migrate existing records. Shared stock starts at zero unless opening balances are entered or an import is arranged. Shared mode supports exports and does not overwrite shared records through browser backup restore.
+
+Regular WhatsApp remains the channel for staff orders and operator replies. See [Normal WhatsApp workflow](docs/WHATSAPP_INTEGRATION.md).
 
 ## File layout
 
