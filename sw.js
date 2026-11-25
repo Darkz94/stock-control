@@ -1,5 +1,5 @@
-const CACHE='stock-control-v5-catalogue';
-const FILES=['./','./index.html','./styles.css?v=5','./app.js?v=5','./cloud.js?v=5','./manifest.webmanifest','./icon.svg',
+const CACHE='stock-control-v6-startup';
+const FILES=['./','./index.html','./styles.css?v=6','./app.js?v=6','./cloud.js?v=6','./manifest.webmanifest','./icon.svg',
 './assets/two-stroke-500ml.webp','./assets/two-stroke-20l.webp','./assets/nylon-line.webp',
 './assets/pine-gel-5l.webp','./assets/pine-gel-20l.webp','./assets/non-selective-20l.webp',
 './assets/non-selective-1l.webp','./assets/selective-20l.webp','./assets/selective-5l.webp',
