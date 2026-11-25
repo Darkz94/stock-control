@@ -1,4 +1,4 @@
-const CACHE='stock-control-v3-screenshots';
+const CACHE='stock-control-v4-catalogue';
 const FILES=['./','./index.html','./styles.css','./app.js','./cloud.js','./manifest.webmanifest','./icon.svg',
 './assets/two-stroke-500ml.webp','./assets/two-stroke-20l.webp','./assets/nylon-line.webp',
 './assets/pine-gel-5l.webp','./assets/pine-gel-20l.webp','./assets/non-selective-20l.webp',

@@ -3,3 +3,26 @@
 @media print{.sidebar,.topbar,.actions,.btn,.modal-actions{display:none!important}.main-content{padding:0}.modal-shade{position:static;background:transparent;padding:0}.modal{box-shadow:none;border:0;max-height:none;width:100%}}
 
 .sign-in { max-width: 440px; margin: 8vh auto 0; padding-inline: 24px; }
+
+.product-edit { align-self: flex-end; margin-top: 8px; }
+
+/* Keep each catalogue photo square so the crop matches the source artwork. */
+.product-image img {
+  width: auto;
+  max-width: 100%;
+  height: calc(100% - 18px);
+  padding: 0;
+  aspect-ratio: 1;
+}
+.category-tag { z-index: 1; }
+img[src="./assets/two-stroke-20l.webp"] { clip-path: inset(0 0 0 16%); }
+img[src="./assets/selective-5l.webp"] { clip-path: inset(0 0 0 11%); }
+img[src="./assets/bleach-5l.webp"] { clip-path: inset(0 0 0 24%); }
+img[src="./assets/toilet-paper.webp"] { clip-path: inset(0 0 0 10%); }
+img[src="./assets/black-bags.webp"] {
+  clip-path: polygon(0 0, 100% 0, 100% 68%, 85% 86%, 0 86%);
+}
+img[src="./assets/rake.webp"] {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 73%, 28% 73%, 28% 42%, 0 42%);
+}
+img[src="./assets/mop.webp"] { clip-path: inset(0 0 0 20%); }
