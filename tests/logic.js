@@ -11,11 +11,17 @@ const ctx={console,Date,Math,Number,Object,Array,Map,String,JSON,RegExp,Intl,cry
  setTimeout,clearTimeout};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync(require('path').join(__dirname,'../app.js'),'utf8'),ctx,{filename:'app.js'});
 const evalCode=code=>vm.runInContext(code,ctx);
-assert.equal(evalCode('PRODUCTS.length'),28);
+assert.equal(evalCode('PRODUCTS.length'),36);
 assert.equal(evalCode('CONVERSIONS.length'),4);
 assert.deepEqual(JSON.parse(JSON.stringify(evalCode(`parseWhatsApp('2 x Pine gel 5 L\\n1 x Two-stroke oil 500 ml\\n3 x Black bags').lines`))),[
  {productId:'pine-gel-5l',quantity:2},{productId:'two-stroke-500ml',quantity:1},{productId:'black-bags',quantity:3}]);
 assert.equal(evalCode("parseWhatsApp('Please send the equipment').unmatched.length"),1);
+// Each added stock item is available in the catalogue and WhatsApp matcher.
+for(const [phrase,id] of [["Petromark Super Two Stroke 20 L", "two-stroke-20l"], ["a660", "a660-turf-adhesive"], ["oilcap", "oilcap-25l"], ["outpace", "outpace-flowable-5l"], ["viroaxe", "viroaxe-5l"], ["starbug", "starbug-5l"], ["cypermethrin", "cypermethrin-1l"], ["hth clear 4 weeks", "hth-clear4weeks-12kg"], ["black sanitiser", "black-sanitiser"]]){
+ assert.equal(evalCode(`parseWhatsApp(${JSON.stringify('2 x '+phrase)}).lines[0].productId`),id);
+ assert.equal(evalCode(`qty(${JSON.stringify(id)})`),0);
+ assert.ok(evalCode('options()').includes(`value="${id}"`));
+}
 // Custom wording uses the same parser for pasted text and screenshot OCR.
 evalCode(`data.settings.productEdits={
  'hand-soap-5l':{nicknames:['Blue soap 5 L','Guest soap']},

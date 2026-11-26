@@ -15,7 +15,7 @@ create table stock_private.state (
   settings jsonb not null default '{"company":"Stock Control","businessWhatsApp":"","lowThreshold":2}'
 );
 insert into stock_private.state (counts) values (
-  '{"two-stroke-500ml":0,"two-stroke-20l":0,"nylon-line":0,"nylon-line-5m":0,"toilet-roll-single":0,"pine-gel-5l":0,"pine-gel-20l":0,"non-selective-20l":0,"non-selective-1l":0,"selective-20l":0,"selective-5l":0,"bleach-5l":0,"toilet-paper":0,"black-bags":0,"rake":0,"broom":0,"mop":0,"broom-sticks":0,"broom-head":0,"all-purpose-cleaner-20l":0,"all-purpose-cleaner-5l":0,"tile-cleaner-20l":0,"tile-cleaner-5l":0,"mop-head":0,"dish-washing-liquid-20l":0,"dish-washing-liquid-5l":0,"hand-soap-20l":0,"hand-soap-5l":0}'
+  '{"two-stroke-500ml":0,"two-stroke-20l":0,"nylon-line":0,"nylon-line-5m":0,"toilet-roll-single":0,"pine-gel-5l":0,"pine-gel-20l":0,"non-selective-20l":0,"non-selective-1l":0,"selective-20l":0,"selective-5l":0,"bleach-5l":0,"toilet-paper":0,"black-bags":0,"rake":0,"broom":0,"mop":0,"broom-sticks":0,"broom-head":0,"all-purpose-cleaner-20l":0,"all-purpose-cleaner-5l":0,"tile-cleaner-20l":0,"tile-cleaner-5l":0,"mop-head":0,"dish-washing-liquid-20l":0,"dish-washing-liquid-5l":0,"hand-soap-20l":0,"hand-soap-5l":0,"a660-turf-adhesive":0,"oilcap-25l":0,"outpace-flowable-5l":0,"viroaxe-5l":0,"starbug-5l":0,"cypermethrin-1l":0,"hth-clear4weeks-12kg":0,"black-sanitiser":0}'
 );
 
 create table stock_private.movements (

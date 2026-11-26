@@ -2,7 +2,7 @@
 /* Stock Control. Only publishable credentials belong in the browser. */
 const PRODUCTS = [
   {id:'two-stroke-500ml',name:'Two-stroke oil',size:'500 ml bottle',group:'Chemicals & liquids',unit:'bottles',img:'two-stroke-500ml.webp',keywords:['two stroke oil 500 ml','two-stroke oil 500 ml','two stroke 500','two-stroke 500','2 stroke 500','2t oil 500']},
-  {id:'two-stroke-20l',name:'Two-stroke oil',size:'20 L bucket',group:'Chemicals & liquids',unit:'buckets',img:'two-stroke-20l.webp',keywords:['two stroke oil 20 l','two-stroke oil 20 l','two stroke 20','two-stroke 20','2 stroke 20','2t oil 20']},
+  {id:'two-stroke-20l',name:'Two-stroke oil',size:'20 L bucket',group:'Chemicals & liquids',unit:'buckets',img:'petromark-two-stroke-20l.webp',keywords:['two stroke oil 20 l','two-stroke oil 20 l','two stroke 20','two-stroke 20','2 stroke 20','2t oil 20','super two stroke','petromark two stroke','petromark super two stroke']},
   {id:'nylon-line',name:'Nylon line',size:'Trimmer line spool',group:'Garden consumables',unit:'spools',img:'nylon-line.webp',keywords:['nylon','trimmer line','brushcutter line']},
   {id:'nylon-line-5m',name:'Brushcutter nylon line',size:'5 m taped coil',group:'Garden consumables',unit:'coils',img:'nylon-line-5m.webp',keywords:['nylon line 5 m','5 m nylon line','nylon 5 m','5 m nylon','brushcutter line 5 m','5 m brushcutter line','trimmer line 5 m','5 m trimmer line','5 m brushcutter nylon line']},
   {id:'pine-gel-5l',name:'Pine gel',size:'5 L bucket',group:'Chemicals & liquids',unit:'buckets',img:'pine-gel-5l.webp',keywords:['pine gel 5','pinegel 5']},
@@ -28,7 +28,15 @@ const PRODUCTS = [
   {"id": "dish-washing-liquid-20l", "name": "Dish Washing Liquid", "size": "20 L container", "group": "Cleaning supplies", "unit": "containers", "img": "dish-washing-liquid-20l.webp", "keywords": ["dish washing liquid 20 l", "dishwashing liquid 20 l", "dishwashing liquid 20"]},
   {"id": "dish-washing-liquid-5l", "name": "Dish Washing Liquid", "size": "5 L container", "group": "Cleaning supplies", "unit": "containers", "img": "dish-washing-liquid-5l.webp", "keywords": ["dish washing liquid 5 l", "dishwashing liquid 5 l", "dishwashing liquid 5"]},
   {"id": "hand-soap-20l", "name": "Hand Soap", "size": "20 L container", "group": "Cleaning supplies", "unit": "containers", "img": "hand-soap-20l.webp", "keywords": ["hand soap 20 l", "hand soap 20"]},
-  {"id": "hand-soap-5l", "name": "Hand Soap", "size": "5 L container", "group": "Cleaning supplies", "unit": "containers", "img": "hand-soap-5l.webp", "keywords": ["hand soap 5 l", "hand soap 5"]}
+  {"id": "hand-soap-5l", "name": "Hand Soap", "size": "5 L container", "group": "Cleaning supplies", "unit": "containers", "img": "hand-soap-5l.webp", "keywords": ["hand soap 5 l", "hand soap 5"]},
+  {"id": "a660-turf-adhesive", "name": "A660 Turf Adhesive", "size": "Two-part kit", "group": "Garden consumables", "unit": "kits", "img": "a660-turf-adhesive.webp", "keywords": ["a660", "a 660", "turf adhesive kit", "two part turf adhesive", "turf epoxy kit"]},
+  {"id": "oilcap-25l", "name": "Oilcap Hydrocarbon Convertor", "size": "25 L drum", "group": "Chemicals & liquids", "unit": "drums", "img": "oilcap-25l.webp", "keywords": ["oilcap", "oil cap", "hydrocarbon convertor", "hydrocarbon converter"]},
+  {"id": "outpace-flowable-5l", "name": "Outpace Flowable", "size": "5 L container", "group": "Chemicals & liquids", "unit": "containers", "img": "outpace-flowable-5l.webp", "keywords": ["outpace", "out pace", "outpace flowable"]},
+  {"id": "viroaxe-5l", "name": "ViRoAXE", "size": "5 L container", "group": "Chemicals & liquids", "unit": "containers", "img": "viroaxe-5l.webp", "keywords": ["viroaxe", "viro axe"]},
+  {"id": "starbug-5l", "name": "Starbug", "size": "5 L container", "group": "Chemicals & liquids", "unit": "containers", "img": "starbug-5l.webp", "keywords": ["starbug", "star bug"]},
+  {"id": "cypermethrin-1l", "name": "Cypermethrin", "size": "1 L bottle", "group": "Chemicals & liquids", "unit": "bottles", "img": "cypermethrin-1l.webp", "keywords": ["cypermethrin", "makhro cypermethrin"]},
+  {"id": "hth-clear4weeks-12kg", "name": "HTH Clear 4 Weeks All-in-One", "size": "1.2 kg box", "group": "Chemicals & liquids", "unit": "boxes", "img": "hth-clear4weeks-12kg.webp", "keywords": ["hth clear 4 weeks", "hth clear4weeks", "clear 4 weeks", "clear4weeks"]},
+  {"id": "black-sanitiser", "name": "Black Sanitiser", "size": "Drum (size to confirm)", "group": "Cleaning supplies", "unit": "drums", "img": "black-sanitiser.webp", "keywords": ["black sanitiser", "black sanitizer"]}
 ];
 const PRODUCT_COLOURS = {
   'all-purpose-cleaner': '#7437aa',
@@ -39,7 +47,15 @@ const PRODUCT_COLOURS = {
   'two-stroke': '#79243b',
   'selective': '#087b77',
   'non-selective': '#454b55',
-  'pine-gel': '#328448'
+  'pine-gel': '#328448',
+  'a660-turf-adhesive': '#59647a',
+  'oilcap': '#246b3b',
+  'outpace-flowable': '#733389',
+  'viroaxe': '#333e79',
+  'starbug': '#14637c',
+  'cypermethrin': '#336522',
+  'hth-clear4weeks-12kg': '#303692',
+  'black-sanitiser': '#30383f'
 };
 function productColour(id) {
   return PRODUCT_COLOURS[id?.replace(/-\d+(?:ml|l)$/, '')];
@@ -71,7 +87,7 @@ function product(id){
  return {...item,name:edit.name||item.name,size:edit.size||item.size,group:edit.group||item.group,unit:edit.unit||item.unit,photo:edit.photo,nicknames:Array.isArray(edit.nicknames)?edit.nicknames:[]};
 }
 const catalogue=()=>PRODUCTS.map(item=>product(item.id));
-const COLOURED_PHOTOS = new Set(['bleach-5l', 'two-stroke-20l', 'selective-20l', 'selective-5l', 'non-selective-20l', 'non-selective-1l', 'all-purpose-cleaner-20l', 'all-purpose-cleaner-5l', 'tile-cleaner-20l', 'tile-cleaner-5l', 'dish-washing-liquid-20l', 'dish-washing-liquid-5l', 'hand-soap-20l', 'hand-soap-5l']);
+const COLOURED_PHOTOS = new Set(['bleach-5l', 'selective-20l', 'selective-5l', 'non-selective-20l', 'non-selective-1l', 'all-purpose-cleaner-20l', 'all-purpose-cleaner-5l', 'tile-cleaner-20l', 'tile-cleaner-5l', 'dish-washing-liquid-20l', 'dish-washing-liquid-5l', 'hand-soap-20l', 'hand-soap-5l']);
 const REFRESHED_PHOTOS = new Set(['toilet-paper', 'black-bags', 'rake', 'broom', 'mop', 'broom-sticks']);
 const img=id=>{
  const item=product(id);

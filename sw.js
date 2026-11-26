@@ -1,6 +1,6 @@
-const CACHE='stock-control-v13-product-nicknames';
-const FILES=['./','./index.html','./styles.css?v=13','./app.js?v=13','./cloud.js?v=13','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png',
-'./assets/two-stroke-500ml.webp','./assets/two-stroke-20l.webp?v=8','./assets/nylon-line.webp','./assets/nylon-line-5m.webp','./assets/toilet-roll-single.webp',
+const CACHE='stock-control-v14-catalogue';
+const FILES=['./','./index.html','./styles.css?v=14','./app.js?v=14','./cloud.js?v=14','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png',
+'./assets/two-stroke-500ml.webp','./assets/petromark-two-stroke-20l.webp','./assets/nylon-line.webp','./assets/nylon-line-5m.webp','./assets/toilet-roll-single.webp',
 './assets/pine-gel-5l.webp','./assets/pine-gel-20l.webp','./assets/non-selective-20l.webp?v=8',
 './assets/non-selective-1l.webp?v=8','./assets/selective-20l.webp?v=8','./assets/selective-5l.webp?v=8',
 './assets/bleach-5l.webp?v=8','./assets/toilet-paper.webp?v=9','./assets/black-bags.webp?v=9',
@@ -14,7 +14,15 @@ const FILES=['./','./index.html','./styles.css?v=13','./app.js?v=13','./cloud.js
 './assets/dish-washing-liquid-20l.webp?v=8',
 './assets/dish-washing-liquid-5l.webp?v=8',
 './assets/hand-soap-20l.webp?v=8',
-'./assets/hand-soap-5l.webp?v=8'];
+'./assets/hand-soap-5l.webp?v=8',
+'./assets/a660-turf-adhesive.webp',
+'./assets/oilcap-25l.webp',
+'./assets/outpace-flowable-5l.webp',
+'./assets/viroaxe-5l.webp',
+'./assets/starbug-5l.webp',
+'./assets/cypermethrin-1l.webp',
+'./assets/hth-clear4weeks-12kg.webp',
+'./assets/black-sanitiser.webp'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)).then(() => self.skipWaiting()));
 });
