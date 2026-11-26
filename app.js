@@ -4,6 +4,7 @@ const PRODUCTS = [
   {id:'two-stroke-500ml',name:'Two-stroke oil',size:'500 ml bottle',group:'Chemicals & liquids',unit:'bottles',img:'two-stroke-500ml.webp',keywords:['two stroke oil 500 ml','two-stroke oil 500 ml','two stroke 500','two-stroke 500','2 stroke 500','2t oil 500']},
   {id:'two-stroke-20l',name:'Two-stroke oil',size:'20 L bucket',group:'Chemicals & liquids',unit:'buckets',img:'two-stroke-20l.webp',keywords:['two stroke oil 20 l','two-stroke oil 20 l','two stroke 20','two-stroke 20','2 stroke 20','2t oil 20']},
   {id:'nylon-line',name:'Nylon line',size:'Trimmer line spool',group:'Garden consumables',unit:'spools',img:'nylon-line.webp',keywords:['nylon','trimmer line','brushcutter line']},
+  {id:'nylon-line-5m',name:'Brushcutter nylon line',size:'5 m taped coil',group:'Garden consumables',unit:'coils',img:'nylon-line-5m.webp',keywords:['nylon line 5 m','5 m nylon line','nylon 5 m','5 m nylon','brushcutter line 5 m','5 m brushcutter line','trimmer line 5 m','5 m trimmer line','5 m brushcutter nylon line']},
   {id:'pine-gel-5l',name:'Pine gel',size:'5 L bucket',group:'Chemicals & liquids',unit:'buckets',img:'pine-gel-5l.webp',keywords:['pine gel 5','pinegel 5']},
   {id:'pine-gel-20l',name:'Pine gel',size:'20 L bucket',group:'Chemicals & liquids',unit:'buckets',img:'pine-gel-20l.webp',keywords:['pine gel 20','pinegel 20']},
   {id:'non-selective-20l',name:'Non-selective herbicide',size:'20 L plastic container',group:'Chemicals & liquids',unit:'containers',img:'non-selective-20l.webp',keywords:['non selective herbicide 20','nonselective herbicide 20','non selective 20','non-selective 20','nonselective 20']},
@@ -11,7 +12,8 @@ const PRODUCTS = [
   {id:'selective-20l',name:'Selective herbicide',size:'20 L container',group:'Chemicals & liquids',unit:'containers',img:'selective-20l.webp',keywords:['selective 20','selective herbicide 20']},
   {id:'selective-5l',name:'Selective herbicide',size:'5 L bucket',group:'Chemicals & liquids',unit:'buckets',img:'selective-5l.webp',keywords:['selective 5','selective herbicide 5']},
   {id:'bleach-5l',name:'Bleach',size:'5 L container',group:'Chemicals & liquids',unit:'containers',img:'bleach-5l.webp',keywords:['bleach','jik']},
-  {id:'toilet-paper',name:'Toilet paper',size:'Pack',group:'Cleaning supplies',unit:'packs',img:'toilet-paper.webp',keywords:['toilet paper','toilet roll','toilet tissue']},
+  {id:'toilet-paper',name:'Toilet paper',size:'Pack',group:'Cleaning supplies',unit:'packs',img:'toilet-paper.webp',keywords:['toilet paper','toilet paper pack','toilet roll pack','toilet rolls pack','pack of toilet paper','pack of toilet rolls','toilet tissue']},
+  {id:'toilet-roll-single',name:'Toilet roll',size:'Single roll',group:'Cleaning supplies',unit:'rolls',img:'toilet-roll-single.webp',keywords:['single toilet roll','single toilet rolls','individual toilet roll','individual toilet rolls','loose toilet roll','loose toilet rolls','toilet rolls','toilet roll','single toilet paper roll','single toilet paper rolls']},
   {id:'black-bags',name:'Black refuse bags',size:'Roll',group:'Cleaning supplies',unit:'rolls',img:'black-bags.webp',keywords:['black refuse bags','black bags','bin bags','refuse bags','garbage bags']},
   {id:'rake',name:'Garden rake',size:'Complete tool',group:'Tools & equipment',unit:'rakes',img:'rake.webp',keywords:['rake','rakes']},
   {id:'broom',name:'Broom',size:'Complete tool',group:'Tools & equipment',unit:'brooms',img:'broom.webp',keywords:['broom','brooms']},
@@ -239,7 +241,7 @@ async function saveProduct(form){
 function options(selected=''){return catalogue().map(p=>`<option value="${esc(p.id)}"${colourStyle(p.id)} ${p.id===selected?'selected':''}>${esc(formatLabel(p))}</option>`).join('')}
 function openStock(id='',mode='receive'){let p=product(id)||PRODUCTS[0];modal(`<form id="stock-form"><div class="field"><label for="stock-product">Product</label><select id="stock-product">${options(p.id)}</select></div><div class="form-grid"><div class="field"><label for="stock-operation">Action</label><select id="stock-operation"><option value="in" ${mode==='receive'?'selected':''}>Receive / add</option><option value="out">Remove / write-off</option><option value="count">Set exact stock count</option></select></div><div class="field"><label for="stock-quantity">Quantity (whole packs)</label><input id="stock-quantity" type="number" min="0" step="1" value="1" required /></div></div><div class="field"><label for="stock-reason">Reason / reference</label><input id="stock-reason" placeholder="e.g. Supplier delivery, stocktake, damaged" maxlength="220" required /></div><div class="notice">Current balance: <strong id="stock-current">${qty(p.id)} ${esc(p.unit)}</strong>All changes will appear in stock history.</div><div class="modal-actions">${btn('Cancel','close-modal','')}<button type="submit" class="btn primary">Save stock movement</button></div></form>`,mode==='receive'?'Receive stock':'Adjust stock');}
 function normaliseOrderText(str){
- return String(str||'').toLowerCase().replace(/(\d+)\s*(millilitres?|milliliters?)\b/g,'$1 ml').replace(/(\d+)\s*(litres?|liters?)\b/g,'$1 l').replace(/(\d+)\s*(ml|l)\b/g,'$1 $2').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+ return String(str||'').toLowerCase().replace(/(\d+)\s*(millilitres?|milliliters?)\b/g,'$1 ml').replace(/(\d+)\s*(litres?|liters?)\b/g,'$1 l').replace(/(\d+)\s*(ml|l|m)\b/g,'$1 $2').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
 }
 function parseWhatsApp(raw){
  const input=String(raw||'').split(/\n|;/).map(l=>l.trim()).filter(Boolean);
@@ -257,7 +259,7 @@ function parseWhatsApp(raw){
   const separateAmounts=(low.match(/\b\d+\s*x\b/g)||[]).length;
   if(productHits.size>1&&(/\b(?:and|plus)\b|[,&+]/i.test(line)||separateAmounts>1)){unmatched.push(line);continue}
   let leading=low.match(/^(\d+)\s*(?:x|of|bottles?|buckets?|containers?|rolls?|packs?|spools?|pcs?|pieces?)?\s/);
-  if(/^\d+\s+(?:l|ml)\b/.test(low))leading=null; // a pack size is not an order quantity
+  if(/^\d+\s+(?:l|ml|m)\b/.test(low))leading=null; // a pack size is not an order quantity
   const trailing=low.match(/(?:x|qty|quantity)\s*(\d+)\s*$/);
   const embedded=!leading&&!trailing?low.match(/\b(\d+)\s*x\b/):null;
   const amount=leading?Number(leading[1]):trailing?Number(trailing[1]):embedded?Number(embedded[1]):1;

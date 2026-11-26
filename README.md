@@ -4,7 +4,7 @@ A mobile-first, installable web app for cleaning and grounds-maintenance stock, 
 
 ## Product catalogue
 
-The app includes 26 independently tracked items and pack sizes. The Cleaning supplies catalogue includes replacement broom and mop heads, plus 5 L and 20 L containers of All Purpose Cleaner, Tile Cleaner, Dish Washing Liquid, and Hand Soap. Product photos are under `assets/`.
+The app includes 28 independently tracked items and pack sizes. The Cleaning supplies catalogue includes replacement broom and mop heads, plus 5 L and 20 L containers of All Purpose Cleaner, Tile Cleaner, Dish Washing Liquid, and Hand Soap. Product photos are under `assets/`.
 
 ## Working features
 

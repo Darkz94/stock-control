@@ -1,6 +1,6 @@
-const CACHE='stock-control-v9-product-photos';
-const FILES=['./','./index.html','./styles.css?v=9','./app.js?v=9','./cloud.js?v=9','./manifest.webmanifest','./icon.svg',
-'./assets/two-stroke-500ml.webp','./assets/two-stroke-20l.webp?v=8','./assets/nylon-line.webp',
+const CACHE='stock-control-v10-stock-rolls';
+const FILES=['./','./index.html','./styles.css?v=10','./app.js?v=10','./cloud.js?v=10','./manifest.webmanifest','./icon.svg',
+'./assets/two-stroke-500ml.webp','./assets/two-stroke-20l.webp?v=8','./assets/nylon-line.webp','./assets/nylon-line-5m.webp','./assets/toilet-roll-single.webp',
 './assets/pine-gel-5l.webp','./assets/pine-gel-20l.webp','./assets/non-selective-20l.webp?v=8',
 './assets/non-selective-1l.webp?v=8','./assets/selective-20l.webp?v=8','./assets/selective-5l.webp?v=8',
 './assets/bleach-5l.webp?v=8','./assets/toilet-paper.webp?v=9','./assets/black-bags.webp?v=9',

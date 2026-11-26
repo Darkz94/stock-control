@@ -21,7 +21,7 @@ try:
         assert page.get_by_text('Your stock, at a glance').is_visible()
         page.screenshot(path='/mnt/data/stock-control-desktop.png',full_page=True)
         page.locator('button[data-view="inventory"]').first.click()
-        assert page.locator('.product').count()==26
+        assert page.locator('.product').count()==28
         missing=page.locator('img').evaluate_all('(images)=>images.filter(i=>!i.complete||i.naturalWidth===0).map(i=>i.src)')
         assert not missing,f'Broken images: {missing}'
         page.locator('button[data-action="adjust-stock"][data-id="pine-gel-5l"]').click()
@@ -52,6 +52,6 @@ try:
         page.screenshot(path='/mnt/data/stock-control-mobile.png',full_page=True)
         assert page.get_by_text('Your stock, at a glance').is_visible()
         assert not errors,f'Page JavaScript errors: {errors}'
-        print('PASS: dashboard, 26 images, receiving, WhatsApp parsing, tickets, collection stock deduction, mobile view, JS errors')
+        print('PASS: dashboard, 28 images, receiving, WhatsApp parsing, tickets, collection stock deduction, mobile view, JS errors')
         browser.close()
 finally:server.shutdown()
