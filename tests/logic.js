@@ -74,4 +74,25 @@ console.log('PASS: catalogue and images, message parser, WhatsApp numbers, singl
  assert.equal(evalCode("data.counts['pine-gel-5l']"),1);
  assert.equal(evalCode("data.movements.filter(x=>x.ticketId==='TEST-0001').length"),1);
  console.log('PASS: ticket confirmation, owner-only deletion and stock history preservation');
+ const ticketCount=evalCode('data.tickets.length');
+ evalCode('newOrder()');
+ assert.match(el('#modal-host').innerHTML,/id="draft-order-screenshot"/);
+ el('#order-manager').value='Existing Manager';
+ const raw='Manager: Screenshot Sender\nSite: North Gate\nPhone: 082 123 4567\n2 x Pine gel 5 L\nUnknown item';
+ ctx.mockScreenshotText=raw;
+ await evalCode(`ocrScript=Promise.resolve({createWorker:async()=>({
+   recognize:async()=>({data:{text:mockScreenshotText}}),terminate:async()=>{}
+ })});
+ captureOrderScreenshot({type:'image/png',size:1024},document)`);
+ assert.equal(el('#order-manager').value,'Existing Manager');
+ assert.equal(el('#order-site').value,'North Gate');
+ assert.equal(el('#order-phone').value,'27821234567');
+ assert.equal(el('#order-message').value,raw);
+ assert.equal(evalCode('ui.draftLines[0].productId'),'pine-gel-5l');
+ assert.equal(evalCode('ui.draftLines[0].quantity'),2);
+ assert.match(el('#unmatched-lines').innerHTML,/Unknown item/);
+ assert.doesNotMatch(el('#unmatched-lines').innerHTML,/North Gate/);
+ assert.equal(evalCode('data.tickets.length'),ticketCount);
+ console.log('PASS: screenshot autofills the draft without saving a ticket');
+
 })().catch(error=>{console.error(error);process.exitCode=1});

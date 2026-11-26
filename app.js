@@ -364,14 +364,17 @@ function loadScreenshotReader() {
  return ocrScript;
 }
 
-async function captureOrderScreenshot(file) {
- const status = document.querySelector('#screenshot-status');
+async function captureOrderScreenshot(file, draftForm = null) {
+ const statusId = draftForm ? '#draft-screenshot-status' : '#screenshot-status';
+ const status = document.querySelector(statusId);
+ const submit = draftForm?.querySelector('button[type="submit"]');
  if (!status || screenshotBusy || saving) return;
  if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 12 * 1024 * 1024) {
   status.textContent = 'Choose a PNG, JPEG or WebP screenshot up to 12 MB.';
   return;
  }
  screenshotBusy = true;
+ if (submit) submit.disabled = true;
  status.textContent = 'Reading screenshot…';
  let worker;
  try {
@@ -382,7 +385,7 @@ async function captureOrderScreenshot(file) {
    langPath: 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int'
   });
   const result = await worker.recognize(file);
-  if (document.querySelector('#screenshot-status') !== status) return;
+  if (document.querySelector(statusId) !== status) return;
   const raw = result.data.text.trim();
   if (!raw) {
    status.textContent = 'No text found. Try a clearer screenshot or paste the WhatsApp text.';
@@ -392,13 +395,19 @@ async function captureOrderScreenshot(file) {
    status.textContent = 'Use a screenshot showing just this order.';
    return;
   }
+  if (draftForm) {
+   fillOrderFromScreenshot(draftForm, raw);
+   status.textContent = 'Screenshot read. Check the details and quantities before creating the ticket.';
+   return;
+  }
   status.textContent = 'Saving ticket for review…';
   await capturePastedOrder(raw, 'whatsapp-screenshot');
-  if (document.querySelector('#screenshot-status') === status) status.textContent = 'Check the ticket list before retrying.';
+  if (document.querySelector(statusId) === status) status.textContent = 'Check the ticket list before retrying.';
  } catch {
-  if (document.querySelector('#screenshot-status') === status) status.textContent = 'Could not read the screenshot. Try again or paste the order text.';
+  if (document.querySelector(statusId) === status) status.textContent = 'Could not read the screenshot. Try again or paste the order text.';
  } finally {
   screenshotBusy = false;
+  if (submit) submit.disabled = false;
   if (worker) await worker.terminate().catch(() => {});
  }
 }
@@ -426,7 +435,35 @@ async function capturePastedOrder(raw, source='manual-whatsapp-paste'){
 function draftLineHTML(line,i){return `<div class="line-entry"><select aria-label="Product ${i+1}" class="order-product"${colourStyle(line.productId)}>${options(line.productId)}</select><input aria-label="Quantity ${i+1}" class="order-qty" type="number" min="1" max="9999" value="${esc(line.quantity)}" required /><button type="button" class="round-btn" data-action="remove-line" data-index="${i}" title="Remove line">×</button></div>`}
 function syncDraft(){const rows=[...document.querySelectorAll('#line-host .line-entry')];if(rows.length)ui.draftLines=rows.map(row=>({productId:row.querySelector('.order-product').value,quantity:Number(row.querySelector('.order-qty').value)}));}
 function redrawLines(){const host=document.querySelector('#line-host');if(host)host.innerHTML=ui.draftLines.map(draftLineHTML).join('')}
-function newOrder(){ui.draftLines=[{productId:PRODUCTS[0].id,quantity:1}];modal(`<form id="order-form"><div class="notice"><strong>Received in normal WhatsApp?</strong>Copy the manager's message from WhatsApp, paste it below, tap Read product lines, then check the quantities. The app cannot access your chats directly.</div><div style="height:13px"></div><div class="form-grid"><div class="field"><label for="order-manager">Manager name *</label><input id="order-manager" required maxlength="100" placeholder="e.g. Site manager" /></div><div class="field"><label for="order-phone">Manager's regular WhatsApp number</label><input id="order-phone" inputmode="tel" placeholder="e.g. +27 82 123 4567" /></div><div class="field full"><label for="order-site">Site / property / department</label><input id="order-site" maxlength="120" placeholder="Where the supplies are needed" /></div></div>
+function showOrderMatches(parsed, replaceLines = false){
+ if(replaceLines||parsed.lines.length){
+  ui.draftLines=parsed.lines;
+  redrawLines();
+ }
+ ui.unmatched=parsed.unmatched;
+ document.querySelector('#unmatched-lines').innerHTML=parsed.unmatched.length
+  ? `<div class="notice warning"><strong>Check these lines</strong>${parsed.unmatched.map(esc).join('<br>')}<br>Add or correct order items as needed.</div>`
+  : '';
+}
+
+function fillOrderFromScreenshot(form, raw){
+ const manager=screenshotManager(raw);
+ const phone=raw.match(/^(?:whatsapp(?: number)?|phone|cell(?:phone)?|mobile)\s*:\s*([+\d][\d ()-]+)$/im)?.[1];
+ const site=raw.match(/^(?:site|property|department)\s*:\s*(.+)$/im)?.[1];
+ const suggestions={manager,phone:whatsappPhone(phone),site:site?.trim().slice(0,120)};
+ for(const [field,value] of Object.entries(suggestions)){
+  const input=form.querySelector('#order-'+field);
+  if(value&&!input.value.trim())input.value=value;
+ }
+ form.querySelector('#order-message').value=raw;
+ const orderText=raw.split('\n').filter(line=>line.trim().replace(/^[‹←<❮]+\s*/, '')!==manager
+  && !/^\s*(?:site|property|department|whatsapp(?: number)?|phone|cell(?:phone)?|mobile)\s*:/i.test(line)).join('\n');
+ showOrderMatches(parseWhatsApp(orderText),true);
+}
+
+function newOrder(){ui.draftLines=[{productId:PRODUCTS[0].id,quantity:1}];modal(`<form id="order-form"><div class="notice"><strong>Received in normal WhatsApp?</strong>Upload a screenshot to fill the draft, or paste the message below. Check the details before creating the ticket.</div>
+ <div class="field" style="margin-top:13px"><label for="draft-order-screenshot">WhatsApp screenshot (optional)</label><input type="file" id="draft-order-screenshot" accept="image/png,image/jpeg,image/webp" aria-describedby="draft-screenshot-status">
+ <small id="draft-screenshot-status" role="status">Reading a screenshot replaces the draft message and order items.</small></div><div class="form-grid"><div class="field"><label for="order-manager">Manager name *</label><input id="order-manager" required maxlength="100" placeholder="e.g. Site manager" /></div><div class="field"><label for="order-phone">Manager's regular WhatsApp number</label><input id="order-phone" inputmode="tel" placeholder="e.g. +27 82 123 4567" /></div><div class="field full"><label for="order-site">Site / property / department</label><input id="order-site" maxlength="120" placeholder="Where the supplies are needed" /></div></div>
  <div class="field"><label for="order-message">Paste message from normal WhatsApp (optional)</label><textarea id="order-message" placeholder="Example:\n2 x Pine gel 5 L\n1 x Two-stroke oil 500 ml\n3 x Black bags"></textarea><div class="actions">${btn('↳ Read product lines','parse-order','')}</div><small>Matched items are only suggestions. Check all products and quantities before creating the ticket.</small></div><div id="unmatched-lines"></div>
  <div class="section-header"><strong>Order items *</strong>${btn('＋ Add product','add-line','tiny')}</div><div class="line-rows" id="line-host"></div><div class="field" style="margin-top:16px"><label for="order-notes">Notes</label><textarea id="order-notes" style="min-height:68px" maxlength="1500" placeholder="Optional preparation or collection instructions"></textarea></div><div class="modal-actions">${btn('Cancel','close-modal','')}<button type="submit" class="btn primary">Create order ticket</button></div></form>`,'New manager order',true);redrawLines();}
 function ticketDetails(id){
@@ -533,7 +570,7 @@ document.addEventListener('click',e=>{
  case 'delete-ticket':confirmTicketDeletion(id);break;
  case 'confirm-delete-ticket':deleteTicket(id);break;
  case 'review-ticket':reviewTicket(id);break;
- case 'parse-order':{const val=document.querySelector('#order-message').value;const parsed=parseWhatsApp(val);if(parsed.lines.length){ui.draftLines=parsed.lines;redrawLines()}ui.unmatched=parsed.unmatched;document.querySelector('#unmatched-lines').innerHTML=parsed.unmatched.length?`<div class="notice warning"><strong>Could not match these lines</strong>${parsed.unmatched.map(esc).join('<br>')}<br>Please add/check the items manually.</div>`:'';notify(`${parsed.lines.length} product types identified. Review before saving.`);break}
+ case 'parse-order':{const parsed=parseWhatsApp(document.querySelector('#order-message').value);showOrderMatches(parsed);notify(`${parsed.lines.length} product types identified. Review before saving.`);break}
  case 'add-line':syncDraft();ui.draftLines.push({productId:PRODUCTS[0].id,quantity:1});redrawLines();break;
  case 'remove-line':syncDraft();ui.draftLines.splice(Number(b.dataset.index),1);redrawLines();break;
  case 'status':changeStatus(id,b.dataset.status);break;
@@ -553,6 +590,7 @@ document.addEventListener('change',e=>{
   if(colour)e.target.style.setProperty('--product-colour',colour);
   else e.target.style.removeProperty('--product-colour');
  }
+ if(e.target.id==='draft-order-screenshot'){const file=e.target.files?.[0];e.target.value='';if(file)captureOrderScreenshot(file,e.target.form);return}
  if(e.target.id==='order-screenshot'){const file=e.target.files?.[0];e.target.value='';if(file)captureOrderScreenshot(file);return}
  if(e.target.id==='stock-product'){let p=product(e.target.value);document.querySelector('#stock-current').textContent=`${qty(p.id)} ${p.unit}`;}
  if(e.target.id==='transfer-type'){let c=CONVERSIONS.find(x=>x.source===e.target.value);document.querySelector('#transfer-preview').textContent=`${qty(c.source)} available · 1 large container becomes ${c.ratio} smaller containers`;}

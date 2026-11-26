@@ -1,5 +1,5 @@
-const CACHE='stock-control-v15-ticket-deletion';
-const FILES=['./','./index.html','./styles.css?v=15','./app.js?v=15','./cloud.js?v=15','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png',
+const CACHE='stock-control-v16-order-screenshot';
+const FILES=['./','./index.html','./styles.css?v=16','./app.js?v=16','./cloud.js?v=16','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png',
 './assets/two-stroke-500ml.webp','./assets/petromark-two-stroke-20l.webp','./assets/nylon-line.webp','./assets/nylon-line-5m.webp','./assets/toilet-roll-single.webp',
 './assets/pine-gel-5l.webp','./assets/pine-gel-20l.webp','./assets/non-selective-20l.webp?v=8',
 './assets/non-selective-1l.webp?v=8','./assets/selective-20l.webp?v=8','./assets/selective-5l.webp?v=8',
