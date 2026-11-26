@@ -1,5 +1,5 @@
-const CACHE='stock-control-v11-share-screenshots';
-const FILES=['./','./index.html','./styles.css?v=11','./app.js?v=11','./cloud.js?v=11','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png',
+const CACHE='stock-control-v12-remember-sign-in';
+const FILES=['./','./index.html','./styles.css?v=12','./app.js?v=12','./cloud.js?v=12','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png',
 './assets/two-stroke-500ml.webp','./assets/two-stroke-20l.webp?v=8','./assets/nylon-line.webp','./assets/nylon-line-5m.webp','./assets/toilet-roll-single.webp',
 './assets/pine-gel-5l.webp','./assets/pine-gel-20l.webp','./assets/non-selective-20l.webp?v=8',
 './assets/non-selective-1l.webp?v=8','./assets/selective-20l.webp?v=8','./assets/selective-5l.webp?v=8',

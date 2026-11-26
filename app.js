@@ -544,6 +544,7 @@ function showSignIn(message = '') {
     <form id="sign-in-form">
       <div class="field"><label for="sign-in-email">Email</label><input id="sign-in-email" type="email" autocomplete="username" required></div>
       <div class="field"><label for="sign-in-password">Password</label><input id="sign-in-password" type="password" autocomplete="current-password" required></div>
+      <label class="remember-sign-in"><input id="keep-signed-in" type="checkbox"> Keep me signed in</label>
       <p id="sign-in-message" role="status">${esc(message)}</p>
       <button class="btn primary" type="submit">Sign in</button>
     </form>`;
@@ -552,7 +553,7 @@ function showSignIn(message = '') {
     const button = host.querySelector('button');
     button.disabled = true;
     try {
-      await cloud.signIn(host.querySelector('#sign-in-email').value.trim(), host.querySelector('#sign-in-password').value);
+      await cloud.signIn(host.querySelector('#sign-in-email').value.trim(), host.querySelector('#sign-in-password').value, host.querySelector('#keep-signed-in').checked);
       await openWorkspace();
     } catch (error) {
       host.querySelector('#sign-in-message').textContent = error.message;

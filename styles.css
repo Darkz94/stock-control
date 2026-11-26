@@ -32,3 +32,6 @@
   .line-entry .order-product { grid-column: 1 / -1; }
   .line-entry .order-qty { max-width: 95px; }
 }
+
+.remember-sign-in { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 14px; }
+.remember-sign-in input { min-height: 0; width: 18px; height: 18px; }
