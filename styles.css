@@ -14,9 +14,6 @@
   aspect-ratio: 1;
 }
 .category-tag { z-index: 1; }
-img[src="./assets/two-stroke-20l.webp"] { clip-path: inset(0 0 0 16%); }
-img[src="./assets/selective-5l.webp"] { clip-path: inset(0 0 0 11%); }
-img[src="./assets/bleach-5l.webp"] { clip-path: inset(0 0 0 24%); }
 img[src="./assets/toilet-paper.webp"] { clip-path: inset(0 0 0 10%); }
 img[src="./assets/black-bags.webp"] {
   clip-path: polygon(0 0, 100% 0, 100% 68%, 85% 86%, 0 86%);
@@ -27,3 +24,20 @@ img[src="./assets/rake.webp"] {
 img[src="./assets/mop.webp"] { clip-path: inset(0 0 0 20%); }
 
 @media (max-width: 620px) { .product-image img { width: min(100%, 120px); } }
+
+.product[style*="--product-colour"] { border-top: 5px solid var(--product-colour); }
+.colour-coded-size { font-size: 1rem; font-weight: 750; color: var(--ink); }
+.order-product[style*="--product-colour"] {
+  border-inline-start: 6px solid var(--product-colour);
+  font-weight: 700;
+}
+.order-product option[style] {
+  background-color: color-mix(in srgb, var(--product-colour) 12%, white);
+  color: var(--ink);
+}
+
+@media (max-width: 480px) {
+  .line-entry { grid-template-columns: minmax(0, 1fr) 36px; }
+  .line-entry .order-product { grid-column: 1 / -1; }
+  .line-entry .order-qty { max-width: 95px; }
+}

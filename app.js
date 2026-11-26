@@ -28,6 +28,24 @@ const PRODUCTS = [
   {"id": "hand-soap-20l", "name": "Hand Soap", "size": "20 L container", "group": "Cleaning supplies", "unit": "containers", "img": "hand-soap-20l.webp", "keywords": ["hand soap 20 l", "hand soap 20"]},
   {"id": "hand-soap-5l", "name": "Hand Soap", "size": "5 L container", "group": "Cleaning supplies", "unit": "containers", "img": "hand-soap-5l.webp", "keywords": ["hand soap 5 l", "hand soap 5"]}
 ];
+const PRODUCT_COLOURS = {
+  'all-purpose-cleaner': '#7437aa',
+  'tile-cleaner': '#194d9e',
+  'dish-washing-liquid': '#bd8300',
+  'hand-soap': '#b93470',
+  'bleach': '#cf591e',
+  'two-stroke': '#79243b',
+  'selective': '#087b77',
+  'non-selective': '#454b55',
+  'pine-gel': '#328448'
+};
+function productColour(id) {
+  return PRODUCT_COLOURS[id?.replace(/-\d+(?:ml|l)$/, '')];
+}
+function colourStyle(id) {
+  const colour = productColour(id);
+  return colour ? ` style="--product-colour:${colour}"` : '';
+}
 const CONVERSIONS=[
   {source:'two-stroke-20l',target:'two-stroke-500ml',ratio:40},
   {source:'pine-gel-20l',target:'pine-gel-5l',ratio:4},
@@ -51,9 +69,10 @@ function product(id){
  return {...item,name:edit.name||item.name,size:edit.size||item.size,group:edit.group||item.group,unit:edit.unit||item.unit,photo:edit.photo};
 }
 const catalogue=()=>PRODUCTS.map(item=>product(item.id));
+const COLOURED_PHOTOS = new Set(['bleach-5l', 'two-stroke-20l', 'selective-20l', 'selective-5l', 'non-selective-20l', 'non-selective-1l', 'all-purpose-cleaner-20l', 'all-purpose-cleaner-5l', 'tile-cleaner-20l', 'tile-cleaner-5l', 'dish-washing-liquid-20l', 'dish-washing-liquid-5l', 'hand-soap-20l', 'hand-soap-5l']);
 const img=id=>{
  const item=product(id);
- return /^data:image\/webp;base64,[a-z0-9+/=]+$/i.test(item.photo||'')?item.photo:'./assets/'+item.img;
+ return /^data:image\/webp;base64,[a-z0-9+/=]+$/i.test(item.photo||'')?item.photo:'./assets/'+item.img+(COLOURED_PHOTOS.has(id)?'?v=8':'');
 };
 const esc=v=>String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
 const dateFmt=iso=>new Date(iso).toLocaleString('en-ZA',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -127,7 +146,7 @@ function inventory(){
  `<div class="toolbar"><div class="searchbox"><span>⌕</span><input id="inventory-search" placeholder="Search products or pack sizes..." autocomplete="off" value="${esc(ui.search)}" aria-label="Search inventory" /></div><span class="subtitle">${filtered.length} products</span></div>
  <div class="filters">${categories.map(c=>`<button class="filter ${ui.category===c?'active':''}" data-action="category" data-category="${esc(c)}">${esc(c)}</button>`).join('')}</div><div class="product-grid" id="product-grid">${filtered.map(productCard).join('')}</div>${filtered.length?'':'<div class="empty-state">No products match this search.</div>'}`;
 }
-function productCard(p){let n=qty(p.id);return `<article class="product"><div class="product-image"><span class="category-tag">${esc(p.group)}</span><img src="${esc(img(p.id))}" alt="${esc(formatLabel(p))}" loading="lazy" /></div><div class="product-info"><div class="product-title">${esc(p.name)}</div><div class="product-variant">${esc(p.size)}</div><div class="product-footer"><div class="stock-qty ${n<=data.settings.lowThreshold?'stock-low':''}">${n}<small>${esc(p.unit)}</small></div><button class="btn tiny" data-action="adjust-stock" data-id="${esc(p.id)}">Adjust</button></div>${accessRole==='owner'?btn('Edit product','edit-product','tiny product-edit','data-id="'+esc(p.id)+'"'):''}</div></article>`}
+function productCard(p){let n=qty(p.id);return `<article class="product"${colourStyle(p.id)}><div class="product-image"><span class="category-tag">${esc(p.group)}</span><img src="${esc(img(p.id))}" alt="${esc(formatLabel(p))}" loading="lazy" /></div><div class="product-info"><div class="product-title">${esc(p.name)}</div><div class="product-variant${productColour(p.id)?' colour-coded-size':''}">${esc(p.size)}</div><div class="product-footer"><div class="stock-qty ${n<=data.settings.lowThreshold?'stock-low':''}">${n}<small>${esc(p.unit)}</small></div><button class="btn tiny" data-action="adjust-stock" data-id="${esc(p.id)}">Adjust</button></div>${accessRole==='owner'?btn('Edit product','edit-product','tiny product-edit','data-id="'+esc(p.id)+'"'):''}</div></article>`}
 function orders(){
  const tks=ui.ticketFilter==='All'?data.tickets:data.tickets.filter(t=>t.status===ui.ticketFilter);
  return title('MANAGER REQUESTS','Order tickets','Paste a normal WhatsApp message and a ticket is created immediately.',btn('＋ Manual order','new-order'))+
@@ -216,7 +235,7 @@ async function saveProduct(form){
  finally{form.inert=false;}
 }
 
-function options(selected=''){return catalogue().map(p=>`<option value="${esc(p.id)}" ${p.id===selected?'selected':''}>${esc(formatLabel(p))}</option>`).join('')}
+function options(selected=''){return catalogue().map(p=>`<option value="${esc(p.id)}"${colourStyle(p.id)} ${p.id===selected?'selected':''}>${esc(formatLabel(p))}</option>`).join('')}
 function openStock(id='',mode='receive'){let p=product(id)||PRODUCTS[0];modal(`<form id="stock-form"><div class="field"><label for="stock-product">Product</label><select id="stock-product">${options(p.id)}</select></div><div class="form-grid"><div class="field"><label for="stock-operation">Action</label><select id="stock-operation"><option value="in" ${mode==='receive'?'selected':''}>Receive / add</option><option value="out">Remove / write-off</option><option value="count">Set exact stock count</option></select></div><div class="field"><label for="stock-quantity">Quantity (whole packs)</label><input id="stock-quantity" type="number" min="0" step="1" value="1" required /></div></div><div class="field"><label for="stock-reason">Reason / reference</label><input id="stock-reason" placeholder="e.g. Supplier delivery, stocktake, damaged" maxlength="220" required /></div><div class="notice">Current balance: <strong id="stock-current">${qty(p.id)} ${esc(p.unit)}</strong>All changes will appear in stock history.</div><div class="modal-actions">${btn('Cancel','close-modal','')}<button type="submit" class="btn primary">Save stock movement</button></div></form>`,mode==='receive'?'Receive stock':'Adjust stock');}
 function normaliseOrderText(str){
  return String(str||'').toLowerCase().replace(/(\d+)\s*(millilitres?|milliliters?)\b/g,'$1 ml').replace(/(\d+)\s*(litres?|liters?)\b/g,'$1 l').replace(/(\d+)\s*(ml|l)\b/g,'$1 $2').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
@@ -343,7 +362,7 @@ async function capturePastedOrder(raw, source='manual-whatsapp-paste'){
  notify(`Ticket ${ticketId} created instantly — check ${parsed.lines.length} matched product(s).`);
 }
 
-function draftLineHTML(line,i){return `<div class="line-entry"><select aria-label="Product ${i+1}" class="order-product">${options(line.productId)}</select><input aria-label="Quantity ${i+1}" class="order-qty" type="number" min="1" max="9999" value="${esc(line.quantity)}" required /><button type="button" class="round-btn" data-action="remove-line" data-index="${i}" title="Remove line">×</button></div>`}
+function draftLineHTML(line,i){return `<div class="line-entry"><select aria-label="Product ${i+1}" class="order-product"${colourStyle(line.productId)}>${options(line.productId)}</select><input aria-label="Quantity ${i+1}" class="order-qty" type="number" min="1" max="9999" value="${esc(line.quantity)}" required /><button type="button" class="round-btn" data-action="remove-line" data-index="${i}" title="Remove line">×</button></div>`}
 function syncDraft(){const rows=[...document.querySelectorAll('#line-host .line-entry')];if(rows.length)ui.draftLines=rows.map(row=>({productId:row.querySelector('.order-product').value,quantity:Number(row.querySelector('.order-qty').value)}));}
 function redrawLines(){const host=document.querySelector('#line-host');if(host)host.innerHTML=ui.draftLines.map(draftLineHTML).join('')}
 function newOrder(){ui.draftLines=[{productId:PRODUCTS[0].id,quantity:1}];modal(`<form id="order-form"><div class="notice"><strong>Received in normal WhatsApp?</strong>Copy the manager's message from WhatsApp, paste it below, tap Read product lines, then check the quantities. The app cannot access your chats directly.</div><div style="height:13px"></div><div class="form-grid"><div class="field"><label for="order-manager">Manager name *</label><input id="order-manager" required maxlength="100" placeholder="e.g. Site manager" /></div><div class="field"><label for="order-phone">Manager's regular WhatsApp number</label><input id="order-phone" inputmode="tel" placeholder="e.g. +27 82 123 4567" /></div><div class="field full"><label for="order-site">Site / property / department</label><input id="order-site" maxlength="120" placeholder="Where the supplies are needed" /></div></div>
@@ -444,6 +463,11 @@ document.addEventListener('click',e=>{
 document.addEventListener('paste',e=>{if(e.target.id!=='quick-paste-message')return;const image=[...(e.clipboardData?.files||[])].find(file=>file.type.startsWith('image/'));if(image){e.preventDefault();captureOrderScreenshot(image);return}const raw=e.clipboardData?.getData('text/plain');if(!raw?.trim())return;e.preventDefault();e.target.value=raw;capturePastedOrder(raw);});
 document.addEventListener('input',e=>{if(e.target.id==='quick-paste-message'&&e.inputType==='insertFromPaste'&&e.target.value.trim()){capturePastedOrder(e.target.value);return}if(e.target.id==='inventory-search'){const start=e.target.selectionStart;ui.search=e.target.value;render();let input=document.querySelector('#inventory-search');input.focus();input.setSelectionRange(start,start)}});
 document.addEventListener('change',e=>{
+ if(e.target.classList.contains('order-product')){
+  const colour=productColour(e.target.value);
+  if(colour)e.target.style.setProperty('--product-colour',colour);
+  else e.target.style.removeProperty('--product-colour');
+ }
  if(e.target.id==='order-screenshot'){const file=e.target.files?.[0];e.target.value='';if(file)captureOrderScreenshot(file);return}
  if(e.target.id==='stock-product'){let p=product(e.target.value);document.querySelector('#stock-current').textContent=`${qty(p.id)} ${p.unit}`;}
  if(e.target.id==='transfer-type'){let c=CONVERSIONS.find(x=>x.source===e.target.value);document.querySelector('#transfer-preview').textContent=`${qty(c.source)} available · 1 large container becomes ${c.ratio} smaller containers`;}
