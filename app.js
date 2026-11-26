@@ -68,7 +68,7 @@ function product(id){
  if(!item)return;
  const edit=data.settings.productEdits?.[id];
  if(!edit)return item;
- return {...item,name:edit.name||item.name,size:edit.size||item.size,group:edit.group||item.group,unit:edit.unit||item.unit,photo:edit.photo};
+ return {...item,name:edit.name||item.name,size:edit.size||item.size,group:edit.group||item.group,unit:edit.unit||item.unit,photo:edit.photo,nicknames:Array.isArray(edit.nicknames)?edit.nicknames:[]};
 }
 const catalogue=()=>PRODUCTS.map(item=>product(item.id));
 const COLOURED_PHOTOS = new Set(['bleach-5l', 'two-stroke-20l', 'selective-20l', 'selective-5l', 'non-selective-20l', 'non-selective-1l', 'all-purpose-cleaner-20l', 'all-purpose-cleaner-5l', 'tile-cleaner-20l', 'tile-cleaner-5l', 'dish-washing-liquid-20l', 'dish-washing-liquid-5l', 'hand-soap-20l', 'hand-soap-5l']);
@@ -194,6 +194,11 @@ function editProduct(id){
    <div class="field"><label for="product-group">Category</label><select id="product-group">${PRODUCT_GROUPS.map(group=>`<option ${group===item.group?'selected':''}>${esc(group)}</option>`).join('')}</select></div>
    <div class="field"><label for="product-unit">Stock unit</label><input id="product-unit" value="${esc(item.unit)}" maxlength="30" required></div>
   </div>
+  <div class="field">
+   <label for="product-nicknames">WhatsApp nicknames</label>
+   <textarea id="product-nicknames" aria-describedby="product-nicknames-help" maxlength="2000" placeholder="e.g. wheelie liners">${esc((item.nicknames||[]).join('\n'))}</textarea>
+   <small id="product-nicknames-help">Enter one nickname per line. Include the size if managers use the same wording for different packs, such as blue soap 5 L and blue soap 20 L.</small>
+  </div>
   <div class="field"><label for="product-photo">Replacement photo</label><input id="product-photo" type="file" accept="image/png,image/jpeg,image/webp"></div>
   ${item.photo?`<label><input id="product-reset-photo" type="checkbox"> Use default photo</label>`:''}
   <div class="modal-actions">${btn('Cancel','close-modal','')}<button class="btn primary" type="submit">Save product</button></div>
@@ -223,13 +228,20 @@ async function saveProduct(form){
  const name=field('name').value.trim(),size=field('size').value.trim();
  const group=field('group').value,unit=field('unit').value.trim();
  if(!name||!size||!unit||!PRODUCT_GROUPS.includes(group)){notify('Enter a name, pack size, category and stock unit.',true);return;}
+ const nicknames=new Map();
+ for(const line of field('nicknames').value.split('\n')){
+  const nickname=line.trim();
+  const key=normaliseOrderText(nickname);
+  if(nickname&&!/[a-z]/.test(key)){notify('Each nickname needs at least one letter.',true);return;}
+  if(key&&!nicknames.has(key))nicknames.set(key,nickname);
+ }
  const file=field('photo').files[0];
  let photo=form.querySelector('#product-reset-photo')?.checked?'':item.photo||'';
  form.inert=true;
  try{
   if(file)photo=await productPhoto(file);
   if(!form.isConnected||saving||accessRole!=='owner')return;
-  data.settings.productEdits={...data.settings.productEdits,[item.id]:{name,size,group,unit,photo}};
+  data.settings.productEdits={...data.settings.productEdits,[item.id]:{name,size,group,unit,photo,nicknames:[...nicknames.values()]}};
   if(!(await save()))return;
   closeModal();
   render();
@@ -243,17 +255,47 @@ function openStock(id='',mode='receive'){let p=product(id)||PRODUCTS[0];modal(`<
 function normaliseOrderText(str){
  return String(str||'').toLowerCase().replace(/(\d+)\s*(millilitres?|milliliters?)\b/g,'$1 ml').replace(/(\d+)\s*(litres?|liters?)\b/g,'$1 l').replace(/(\d+)\s*(ml|l|m)\b/g,'$1 $2').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
 }
+const includesPhrase=(text,phrase)=>(' '+text+' ').includes(' '+phrase+' ');
+const packSizes=text=>text.match(/\b\d+ (?:ml|l|m)\b/g)||[];
+
 function parseWhatsApp(raw){
  const input=String(raw||'').split(/\n|;/).map(l=>l.trim()).filter(Boolean);
  const found=new Map(),unmatched=[];
- const ordered=catalogue().map(p=>({...p,finds:[formatLabel(p),...p.keywords,...(p.name!==PRODUCTS.find(item=>item.id===p.id).name?[p.name+' '+p.size]:[])].map(normaliseOrderText)}));
+ const ordered=catalogue().map(p=>({
+  ...p,
+  finds:[formatLabel(p),...p.keywords].map(normaliseOrderText),
+  aliases:(p.nicknames||[]).map(normaliseOrderText).filter(Boolean)
+ }));
  for(let line of input){
   if(/^(?:from|sender|manager)\s*:/i.test(line))continue;
   if(/^\s*\[[^\]]+\]\s*[^:\n]{2,65}:\s*/.test(line))line=line.replace(/^\s*\[[^\]]+\]\s*[^:\n]{2,65}:\s*/,'');
-  const low=normaliseOrderText(line);let result=null,score=0;const productHits=new Set();
-  for(const p of ordered){for(const k of p.finds){
-   if(k&&(' '+low+' ').includes(' '+k+' ')){productHits.add(p.id);if(k.length>score){result=p;score=k.length}}
-  }}
+  const low=normaliseOrderText(line);
+  const matches=[];
+  const productHits=new Set();
+  let result=null,score=0,hasNickname=false;
+  for(const p of ordered){
+   for(const phrase of p.finds){
+    if(!phrase||!includesPhrase(low,phrase))continue;
+    matches.push({p,phrase});
+    productHits.add(p.id);
+    if(phrase.length>score){result=p;score=phrase.length}
+   }
+   for(const phrase of p.aliases){
+    if(!includesPhrase(low,phrase))continue;
+    matches.push({p,phrase});
+    productHits.add(p.id);
+    hasNickname=true;
+   }
+  }
+  if(hasNickname){
+   // A more specific phrase can identify a pack, but distinct or equally specific products need review.
+   const strongest=matches.filter(hit=>!matches.some(other=>other.phrase.length>hit.phrase.length&&includesPhrase(other.phrase,hit.phrase)));
+   const ids=new Set(strongest.map(hit=>hit.p.id));
+   if(ids.size!==1){unmatched.push(line);continue}
+   result=strongest[0].p;
+   const expected=packSizes(normaliseOrderText(result.size));
+   if(expected.length&&packSizes(low).some(size=>!expected.includes(size))){unmatched.push(line);continue}
+  }
   if(!result){unmatched.push(line);continue}
   // Two requested products in the same sentence need manual review, not a guessed one-item order.
   const separateAmounts=(low.match(/\b\d+\s*x\b/g)||[]).length;
