@@ -500,6 +500,39 @@ document.querySelector('#backup-import').addEventListener('change',async e=>{con
 document.querySelector('#menu-toggle').addEventListener('click',()=>document.querySelector('#sidebar').classList.toggle('open'));
 document.querySelector('#today-date').textContent=new Date().toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'long',year:'numeric'});
 if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).catch(e=>console.warn('Offline mode unavailable',e));
+
+async function openSharedScreenshot() {
+  const url = new URL(location.href);
+  const id = url.searchParams.get('shared');
+  if (!id) return;
+  url.searchParams.delete('shared');
+  history.replaceState(null, '', url);
+  if (accessRole !== 'owner') {
+    notify('This account cannot create order tickets.', true);
+    return;
+  }
+  navigate('orders');
+  const status = document.querySelector('#screenshot-status');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    status.textContent = id === 'invalid'
+      ? 'Share one PNG, JPEG or WebP screenshot up to 12 MB.'
+      : 'Could not receive the screenshot. Share it again or use Upload screenshot.';
+    return;
+  }
+  try {
+    const cache = await caches.open('stock-screenshot-inbox');
+    const key = new URL('./shared-image/' + id, url);
+    const response = await cache.match(key);
+    const claimed = await cache.delete(key);
+    if (!response || !claimed || Date.now() - Number(response.headers.get('x-stock-shared-at')) > 60 * 60 * 1000) {
+      status.textContent = 'The shared screenshot expired or was already opened. Share it again or use Upload screenshot.';
+      return;
+    }
+    if (document.querySelector('#screenshot-status') === status) await captureOrderScreenshot(await response.blob());
+  } catch {
+    status.textContent = 'Could not open the screenshot. Share it again or use Upload screenshot.';
+  }
+}
 function showSignIn(message = '') {
   accessRole = null;
   data = initial();
@@ -537,6 +570,7 @@ async function openWorkspace() {
   document.querySelector('#sign-in').hidden = true;
   document.querySelector('#app-shell').style.display = '';
   render();
+  await openSharedScreenshot();
 }
 
 if (cloud) {

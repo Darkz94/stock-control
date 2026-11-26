@@ -1,11 +1,41 @@
 {
-  "name":"Stock Control — Operations Desk",
-  "short_name":"Stock Control",
-  "description":"Stock orders and inventory tracker",
-  "start_url":"./index.html",
-  "scope":"./",
-  "display":"standalone",
-  "background_color":"#f6f8f7",
-  "theme_color":"#153d36",
-  "icons":[{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+  "name": "Stock Control \u2014 Operations Desk",
+  "short_name": "Stock Control",
+  "description": "Stock orders and inventory tracker",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f8f7",
+  "theme_color": "#153d36",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "share_target": {
+    "action": "./share-screenshot",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "screenshot",
+          "accept": [
+            "image/png",
+            "image/jpeg",
+            "image/webp"
+          ]
+        }
+      ]
+    }
+  }
 }
