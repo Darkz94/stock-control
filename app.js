@@ -12,7 +12,7 @@ const PRODUCTS = [
   {id:'selective-5l',name:'Selective herbicide',size:'5 L bucket',group:'Chemicals & liquids',unit:'buckets',img:'selective-5l.webp',keywords:['selective 5','selective herbicide 5']},
   {id:'bleach-5l',name:'Bleach',size:'5 L container',group:'Chemicals & liquids',unit:'containers',img:'bleach-5l.webp',keywords:['bleach','jik']},
   {id:'toilet-paper',name:'Toilet paper',size:'Pack',group:'Cleaning supplies',unit:'packs',img:'toilet-paper.webp',keywords:['toilet paper','toilet roll','toilet tissue']},
-  {id:'black-bags',name:'Black bags',size:'Roll',group:'Cleaning supplies',unit:'rolls',img:'black-bags.webp',keywords:['black bags','bin bags','refuse bags','garbage bags']},
+  {id:'black-bags',name:'Black refuse bags',size:'Roll',group:'Cleaning supplies',unit:'rolls',img:'black-bags.webp',keywords:['black refuse bags','black bags','bin bags','refuse bags','garbage bags']},
   {id:'rake',name:'Garden rake',size:'Complete tool',group:'Tools & equipment',unit:'rakes',img:'rake.webp',keywords:['rake','rakes']},
   {id:'broom',name:'Broom',size:'Complete tool',group:'Tools & equipment',unit:'brooms',img:'broom.webp',keywords:['broom','brooms']},
   {id:'mop',name:'Mop',size:'Complete tool',group:'Cleaning supplies',unit:'mops',img:'mop.webp',keywords:['mop','mops']},
@@ -70,9 +70,10 @@ function product(id){
 }
 const catalogue=()=>PRODUCTS.map(item=>product(item.id));
 const COLOURED_PHOTOS = new Set(['bleach-5l', 'two-stroke-20l', 'selective-20l', 'selective-5l', 'non-selective-20l', 'non-selective-1l', 'all-purpose-cleaner-20l', 'all-purpose-cleaner-5l', 'tile-cleaner-20l', 'tile-cleaner-5l', 'dish-washing-liquid-20l', 'dish-washing-liquid-5l', 'hand-soap-20l', 'hand-soap-5l']);
+const REFRESHED_PHOTOS = new Set(['toilet-paper', 'black-bags', 'rake', 'broom', 'mop', 'broom-sticks']);
 const img=id=>{
  const item=product(id);
- return /^data:image\/webp;base64,[a-z0-9+/=]+$/i.test(item.photo||'')?item.photo:'./assets/'+item.img+(COLOURED_PHOTOS.has(id)?'?v=8':'');
+ return /^data:image\/webp;base64,[a-z0-9+/=]+$/i.test(item.photo||'')?item.photo:'./assets/'+item.img+(REFRESHED_PHOTOS.has(id)?'?v=9':COLOURED_PHOTOS.has(id)?'?v=8':'');
 };
 const esc=v=>String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
 const dateFmt=iso=>new Date(iso).toLocaleString('en-ZA',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});

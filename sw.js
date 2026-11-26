@@ -1,10 +1,10 @@
-const CACHE='stock-control-v8-product-colours';
-const FILES=['./','./index.html','./styles.css?v=8','./app.js?v=8','./cloud.js?v=8','./manifest.webmanifest','./icon.svg',
+const CACHE='stock-control-v9-product-photos';
+const FILES=['./','./index.html','./styles.css?v=9','./app.js?v=9','./cloud.js?v=9','./manifest.webmanifest','./icon.svg',
 './assets/two-stroke-500ml.webp','./assets/two-stroke-20l.webp?v=8','./assets/nylon-line.webp',
 './assets/pine-gel-5l.webp','./assets/pine-gel-20l.webp','./assets/non-selective-20l.webp?v=8',
 './assets/non-selective-1l.webp?v=8','./assets/selective-20l.webp?v=8','./assets/selective-5l.webp?v=8',
-'./assets/bleach-5l.webp?v=8','./assets/toilet-paper.webp','./assets/black-bags.webp',
-'./assets/rake.webp','./assets/broom.webp','./assets/mop.webp','./assets/broom-sticks.webp',
+'./assets/bleach-5l.webp?v=8','./assets/toilet-paper.webp?v=9','./assets/black-bags.webp?v=9',
+'./assets/rake.webp?v=9','./assets/broom.webp?v=9','./assets/mop.webp?v=9','./assets/broom-sticks.webp?v=9',
 './assets/broom-head.webp',
 './assets/all-purpose-cleaner-20l.webp?v=8',
 './assets/all-purpose-cleaner-5l.webp?v=8',

@@ -14,15 +14,6 @@
   aspect-ratio: 1;
 }
 .category-tag { z-index: 1; }
-img[src="./assets/toilet-paper.webp"] { clip-path: inset(0 0 0 10%); }
-img[src="./assets/black-bags.webp"] {
-  clip-path: polygon(0 0, 100% 0, 100% 68%, 85% 86%, 0 86%);
-}
-img[src="./assets/rake.webp"] {
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 73%, 28% 73%, 28% 42%, 0 42%);
-}
-img[src="./assets/mop.webp"] { clip-path: inset(0 0 0 20%); }
-
 @media (max-width: 620px) { .product-image img { width: min(100%, 120px); } }
 
 .product[style*="--product-colour"] { border-top: 5px solid var(--product-colour); }
