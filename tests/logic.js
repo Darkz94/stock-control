@@ -56,3 +56,22 @@ assert.equal(evalCode("data.counts['pine-gel-5l']"),1);
 assert.equal(evalCode("data.tickets.find(t=>t.id==='TEST-0002').status"),'ready');
 for(const p of JSON.parse(JSON.stringify(evalCode('PRODUCTS'))))assert.ok(fs.existsSync(require('path').join(__dirname,'../assets',p.img)),`Missing image: ${p.img}`);
 console.log('PASS: catalogue and images, message parser, WhatsApp numbers, single-issue collection and insufficient-stock protection');
+
+(async()=>{
+ evalCode("accessRole='owner'; confirmTicketDeletion('TEST-0001')");
+ assert.match(el('#modal-host').innerHTML,/Confirm deletion/);
+ assert.ok(evalCode("data.tickets.some(t=>t.id==='TEST-0001')"));
+ evalCode("ticketDetails('TEST-0001')");
+ assert.ok(evalCode("data.tickets.some(t=>t.id==='TEST-0001')"));
+ evalCode("accessRole='stock'; ticketDetails('TEST-0001')");
+ assert.doesNotMatch(el('#modal-host').innerHTML,/data-action="delete-ticket"/);
+ await evalCode("deleteTicket('TEST-0001')");
+ assert.ok(evalCode("data.tickets.some(t=>t.id==='TEST-0001')"));
+ evalCode("accessRole='owner'; confirmTicketDeletion('TEST-0001')");
+ await evalCode("deleteTicket('TEST-0001')");
+ assert.ok(!evalCode("data.tickets.some(t=>t.id==='TEST-0001')"));
+ assert.ok(evalCode("data.tickets.some(t=>t.id==='TEST-0002')"));
+ assert.equal(evalCode("data.counts['pine-gel-5l']"),1);
+ assert.equal(evalCode("data.movements.filter(x=>x.ticketId==='TEST-0001').length"),1);
+ console.log('PASS: ticket confirmation, owner-only deletion and stock history preservation');
+})().catch(error=>{console.error(error);process.exitCode=1});

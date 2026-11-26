@@ -454,7 +454,29 @@ function ticketDetails(id){
  ${t.status!=='review'?btn('Copy reply text','copy-manager-message','',`data-id="${esc(t.id)}" data-message="${['ready','collected'].includes(t.status)?'ready':'ack'}"`):''}
  ${btn('Print ticket','print-ticket','',`data-id="${esc(t.id)}"`)}
  </div><p class="footer-note">Normal WhatsApp only. Opening a prefilled chat does not send the message; you must check and tap Send yourself.</p>
- <div class="modal-actions">${btn('Close','close-modal','')}</div>`,'Order ticket · '+id,true);
+ <div class="modal-actions">${accessRole==='owner'?btn('Delete ticket','delete-ticket','danger',`data-id="${esc(id)}"`):''}${btn('Close','close-modal','')}</div>`,'Order ticket · '+id,true);
+}
+function confirmTicketDeletion(id){
+ const ticket=data.tickets.find(t=>t.id===id);
+ if(accessRole!=='owner'||saving||!ticket)return;
+ modal(`<p class="subtitle">Permanently delete ticket <strong>${esc(id)}</strong> for ${esc(ticket.manager)}?</p>
+ <p class="footer-note">Stock balances and stock movement history are preserved. Any stock already issued stays deducted.</p>
+ <div class="modal-actions">
+  ${btn('Keep ticket','ticket-detail','',`data-id="${esc(id)}"`)}
+  ${btn('Confirm deletion','confirm-delete-ticket','danger',`data-id="${esc(id)}"`)}
+ </div>`,'Delete ticket');
+}
+async function deleteTicket(id){
+ if(accessRole!=='owner'||saving||!data.tickets.some(ticket=>ticket.id===id))return;
+ const originalTickets=data.tickets;
+ data.tickets=originalTickets.filter(ticket=>ticket.id!==id);
+ if(!(await save())){
+  if(!cloud)data.tickets=originalTickets;
+  return;
+ }
+ closeModal();
+ render();
+ notify('Ticket deleted.');
 }
 function reviewTicket(id){
  const t=data.tickets.find(x=>x.id===id);if(!t||['collected','cancelled'].includes(t.status)){notify('Ticket cannot be edited.',true);return}
@@ -508,6 +530,8 @@ document.addEventListener('click',e=>{
  case 'new-transfer':transferDialog(b.dataset.source);break;
  case 'order-screenshot':document.querySelector('#order-screenshot')?.click();break;
  case 'quick-capture':capturePastedOrder(document.querySelector('#quick-paste-message')?.value||'');break;
+ case 'delete-ticket':confirmTicketDeletion(id);break;
+ case 'confirm-delete-ticket':deleteTicket(id);break;
  case 'review-ticket':reviewTicket(id);break;
  case 'parse-order':{const val=document.querySelector('#order-message').value;const parsed=parseWhatsApp(val);if(parsed.lines.length){ui.draftLines=parsed.lines;redrawLines()}ui.unmatched=parsed.unmatched;document.querySelector('#unmatched-lines').innerHTML=parsed.unmatched.length?`<div class="notice warning"><strong>Could not match these lines</strong>${parsed.unmatched.map(esc).join('<br>')}<br>Please add/check the items manually.</div>`:'';notify(`${parsed.lines.length} product types identified. Review before saving.`);break}
  case 'add-line':syncDraft();ui.draftLines.push({productId:PRODUCTS[0].id,quantity:1});redrawLines();break;
