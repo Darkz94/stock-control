@@ -4,7 +4,7 @@ A mobile-first, installable web app for cleaning and grounds-maintenance stock, 
 
 ## Product catalogue
 
-The app includes 16 independently tracked pack sizes: two-stroke oil (500 ml and 20 L), nylon line, pine gel (5 L and 20 L), non-selective herbicide (1 L and 20 L), selective herbicide (5 L and 20 L), bleach (illustrated as 5 L — confirm actual pack size), toilet paper, black bags, rake, broom, mop, and broom sticks. The 16 individual product images were cropped from the approved combined reference image and supplied under `assets/`.
+The app includes 26 independently tracked items and pack sizes. The Cleaning supplies catalogue includes replacement broom and mop heads, plus 5 L and 20 L containers of All Purpose Cleaner, Tile Cleaner, Dish Washing Liquid, and Hand Soap. Product photos are under `assets/`.
 
 ## Working features
 
