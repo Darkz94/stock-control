@@ -11,7 +11,7 @@ const ctx={console,Date,Math,Number,Object,Array,Map,String,JSON,RegExp,Intl,cry
  setTimeout,clearTimeout};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync(require('path').join(__dirname,'../app.js'),'utf8'),ctx,{filename:'app.js'});
 const evalCode=code=>vm.runInContext(code,ctx);
-assert.equal(evalCode('PRODUCTS.length'),16);
+assert.equal(evalCode('PRODUCTS.length'),26);
 assert.equal(evalCode('CONVERSIONS.length'),4);
 assert.deepEqual(JSON.parse(JSON.stringify(evalCode(`parseWhatsApp('2 x Pine gel 5 L\\n1 x Two-stroke oil 500 ml\\n3 x Black bags').lines`))),[
  {productId:'pine-gel-5l',quantity:2},{productId:'two-stroke-500ml',quantity:1},{productId:'black-bags',quantity:3}]);

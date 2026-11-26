@@ -16,7 +16,17 @@ const PRODUCTS = [
   {id:'rake',name:'Garden rake',size:'Complete tool',group:'Tools & equipment',unit:'rakes',img:'rake.webp',keywords:['rake','rakes']},
   {id:'broom',name:'Broom',size:'Complete tool',group:'Tools & equipment',unit:'brooms',img:'broom.webp',keywords:['broom','brooms']},
   {id:'mop',name:'Mop',size:'Complete tool',group:'Cleaning supplies',unit:'mops',img:'mop.webp',keywords:['mop','mops']},
-  {id:'broom-sticks',name:'Broom sticks',size:'Loose handles',group:'Tools & equipment',unit:'sticks',img:'broom-sticks.webp',keywords:['broom stick','broomstick','handles','wooden pole']}
+  {id:'broom-sticks',name:'Broom sticks',size:'Loose handles',group:'Tools & equipment',unit:'sticks',img:'broom-sticks.webp',keywords:['broom stick','broomstick','handles','wooden pole']},
+  {"id": "broom-head", "name": "Broom head", "size": "Replacement head", "group": "Cleaning supplies", "unit": "broom heads", "img": "broom-head.webp", "keywords": ["broom head", "broom heads"]},
+  {"id": "all-purpose-cleaner-20l", "name": "All Purpose Cleaner", "size": "20 L container", "group": "Cleaning supplies", "unit": "containers", "img": "all-purpose-cleaner-20l.webp", "keywords": ["all purpose cleaner 20 l", "all purpose cleaner 20"]},
+  {"id": "all-purpose-cleaner-5l", "name": "All Purpose Cleaner", "size": "5 L container", "group": "Cleaning supplies", "unit": "containers", "img": "all-purpose-cleaner-5l.webp", "keywords": ["all purpose cleaner 5 l", "all purpose cleaner 5"]},
+  {"id": "tile-cleaner-20l", "name": "Tile Cleaner", "size": "20 L container", "group": "Cleaning supplies", "unit": "containers", "img": "tile-cleaner-20l.webp", "keywords": ["tile cleaner 20 l", "tile cleaner 20"]},
+  {"id": "tile-cleaner-5l", "name": "Tile Cleaner", "size": "5 L container", "group": "Cleaning supplies", "unit": "containers", "img": "tile-cleaner-5l.webp", "keywords": ["tile cleaner 5 l", "tile cleaner 5"]},
+  {"id": "mop-head", "name": "Mop head", "size": "Replacement head", "group": "Cleaning supplies", "unit": "mop heads", "img": "mop-head.webp", "keywords": ["mop head", "mop heads"]},
+  {"id": "dish-washing-liquid-20l", "name": "Dish Washing Liquid", "size": "20 L container", "group": "Cleaning supplies", "unit": "containers", "img": "dish-washing-liquid-20l.webp", "keywords": ["dish washing liquid 20 l", "dishwashing liquid 20 l", "dishwashing liquid 20"]},
+  {"id": "dish-washing-liquid-5l", "name": "Dish Washing Liquid", "size": "5 L container", "group": "Cleaning supplies", "unit": "containers", "img": "dish-washing-liquid-5l.webp", "keywords": ["dish washing liquid 5 l", "dishwashing liquid 5 l", "dishwashing liquid 5"]},
+  {"id": "hand-soap-20l", "name": "Hand Soap", "size": "20 L container", "group": "Cleaning supplies", "unit": "containers", "img": "hand-soap-20l.webp", "keywords": ["hand soap 20 l", "hand soap 20"]},
+  {"id": "hand-soap-5l", "name": "Hand Soap", "size": "5 L container", "group": "Cleaning supplies", "unit": "containers", "img": "hand-soap-5l.webp", "keywords": ["hand soap 5 l", "hand soap 5"]}
 ];
 const CONVERSIONS=[
   {source:'two-stroke-20l',target:'two-stroke-500ml',ratio:40},
